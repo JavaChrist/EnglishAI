@@ -45,6 +45,9 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: light)", color: "#3b82f6" },
     { media: "(prefers-color-scheme: dark)", color: "#0d1424" },
   ],
+  // Resize the layout (rather than overlay) when the mobile keyboard opens,
+  // so the chat input stays visible above it.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

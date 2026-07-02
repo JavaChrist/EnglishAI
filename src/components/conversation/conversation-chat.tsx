@@ -2,21 +2,14 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import {
-  ArrowLeft,
-  Loader2,
-  Mic,
-  Send,
-  Square,
-  Volume2,
-} from "lucide-react";
+import { ArrowLeft, Loader2, Mic, Send, Square, Volume2 } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
 import { Mascot } from "@/components/mascot/mascot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useSpeechRecognition } from "@/components/conversation/use-speech-recognition";
+import { useRecorder } from "@/components/conversation/use-recorder";
 import { useTts } from "@/components/conversation/use-tts";
 import { cn } from "@/lib/utils";
 import type { Accent, Voice } from "@/types/database";
@@ -33,7 +26,6 @@ export function ConversationChat({
   label,
   opener,
   voice,
-  accent,
 }: {
   conversationId: string;
   scenario: string;
@@ -43,6 +35,8 @@ export function ConversationChat({
   accent: Accent;
 }) {
   const [input, setInput] = React.useState("");
+  const [transcribing, setTranscribing] = React.useState(false);
+  const [micHint, setMicHint] = React.useState<string | null>(null);
   const endRef = React.useRef<HTMLDivElement>(null);
   const spokenRef = React.useRef<Set<string>>(new Set());
 
@@ -90,12 +84,36 @@ export function ConversationChat({
     [sendMessage, stopTts],
   );
 
-  const lang = accent === "uk" ? "en-GB" : "en-US";
-  const recognition = useSpeechRecognition({
-    lang,
-    onChange: setInput,
-    onFinalize: send,
-  });
+  const handleRecorded = React.useCallback(
+    async (blob: Blob) => {
+      setTranscribing(true);
+      setMicHint("Transcribing…");
+      try {
+        const form = new FormData();
+        form.append("file", blob, "speech.webm");
+        const res = await fetch("/api/voice/transcribe", {
+          method: "POST",
+          body: form,
+        });
+        if (!res.ok) throw new Error(`Transcribe ${res.status}`);
+        const { text } = (await res.json()) as { text: string };
+        if (text?.trim()) {
+          send(text);
+          setMicHint(null);
+        } else {
+          setMicHint("I didn't catch that — try speaking again.");
+        }
+      } catch (err) {
+        console.error("[transcribe] failed", err);
+        setMicHint("Couldn't transcribe the audio. Please try again.");
+      } finally {
+        setTranscribing(false);
+      }
+    },
+    [send],
+  );
+
+  const recorder = useRecorder({ onRecorded: handleRecorded });
 
   // Auto-speak the coach's replies once generation settles.
   React.useEffect(() => {
@@ -118,33 +136,27 @@ export function ConversationChat({
   }
 
   function toggleMic() {
-    if (recognition.listening) {
-      recognition.stop();
+    if (recorder.recording) {
+      recorder.stop();
     } else {
       stopTts();
-      recognition.start();
+      setMicHint(null);
+      void recorder.start();
     }
   }
 
-  let micHint: string | null = null;
-  if (recognition.listening) {
-    micHint = "Listening… tap the mic again when you're done.";
-  } else if (
-    recognition.error === "not-allowed" ||
-    recognition.error === "service-not-allowed"
-  ) {
-    micHint =
-      "Microphone access is blocked. Allow it in your browser, then try again.";
-  } else if (recognition.error === "audio-capture") {
-    micHint = "No microphone found. Check your Windows sound settings.";
-  } else if (recognition.error === "network") {
-    micHint = "Speech recognition needs an internet connection.";
-  } else if (recognition.error && recognition.error !== "no-speech") {
-    micHint = `Microphone issue: ${recognition.error}`;
-  }
+  const recorderHint = recorder.recording
+    ? "Recording… tap the mic again to send."
+    : recorder.error === "NotAllowedError"
+      ? "Microphone access is blocked. Allow it and try again."
+      : recorder.error === "NotFoundError"
+        ? "No microphone found. Check your device settings."
+        : recorder.error
+          ? `Microphone issue: ${recorder.error}`
+          : micHint;
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-border/60">
         <div className="mx-auto flex w-full max-w-2xl items-center gap-3 px-4 py-2">
           <Button
@@ -162,7 +174,7 @@ export function ConversationChat({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6">
           {messages.map((message) => {
             const isUser = message.role === "user";
@@ -196,9 +208,7 @@ export function ConversationChat({
                         size="sm"
                         className="h-7 gap-1 px-2 text-xs text-muted-foreground"
                         onClick={() =>
-                          isSpeaking
-                            ? stopTts()
-                            : void speak(message.id, text)
+                          isSpeaking ? stopTts() : void speak(message.id, text)
                         }
                         aria-label={isSpeaking ? "Stop" : "Play"}
                       >
@@ -215,9 +225,7 @@ export function ConversationChat({
                         variant="ghost"
                         size="sm"
                         className="h-7 gap-1 px-2 text-xs text-muted-foreground"
-                        onClick={() =>
-                          void speak(message.id, text, { slow: true })
-                        }
+                        onClick={() => void speak(message.id, text, { slow: true })}
                         aria-label="Replay slowly"
                       >
                         <Volume2 className="size-3.5" />
@@ -246,41 +254,48 @@ export function ConversationChat({
         </div>
       </div>
 
-      <div className="sticky bottom-0 border-t border-border/60 bg-background/80 backdrop-blur">
-        {micHint && (
+      <div className="border-t border-border/60 bg-background/80 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+        {recorderHint && (
           <div className="mx-auto w-full max-w-2xl px-4 pt-2">
-            <p className="text-xs text-muted-foreground">{micHint}</p>
+            <p className="text-xs text-muted-foreground">{recorderHint}</p>
           </div>
         )}
         <form
           onSubmit={onSubmit}
           className="mx-auto flex w-full max-w-2xl items-center gap-2 px-4 py-3"
         >
-          {recognition.supported && (
+          {recorder.supported && (
             <Button
               type="button"
               size="icon"
-              variant={recognition.listening ? "default" : "outline"}
+              variant={recorder.recording ? "default" : "outline"}
               className={cn(
                 "size-11 shrink-0",
-                recognition.listening && "animate-pulse",
+                recorder.recording && "animate-pulse",
               )}
               onClick={toggleMic}
-              aria-label={recognition.listening ? "Stop listening" : "Speak"}
+              disabled={transcribing}
+              aria-label={recorder.recording ? "Stop and send" : "Speak"}
             >
-              <Mic className="size-5" />
+              {transcribing ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : recorder.recording ? (
+                <Square className="size-5 fill-current" />
+              ) : (
+                <Mic className="size-5" />
+              )}
             </Button>
           )}
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
-              recognition.listening
-                ? "Listening... speak now"
+              recorder.recording
+                ? "Recording… tap the mic to send"
                 : "Type or tap the mic to speak..."
             }
             className="h-11"
-            autoFocus
+            disabled={recorder.recording || transcribing}
           />
           <Button
             type="submit"

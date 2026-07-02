@@ -67,7 +67,7 @@ export default async function ConversationSessionPage({
   }
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex h-dvh flex-col overflow-hidden">
       <AppHeader />
       <ConversationChat
         conversationId={conversation.id as string}
