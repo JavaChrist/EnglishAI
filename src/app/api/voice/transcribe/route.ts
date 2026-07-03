@@ -42,6 +42,9 @@ export async function POST(req: Request) {
   openaiForm.append("file", file, filename);
   openaiForm.append("model", "whisper-1");
   openaiForm.append("language", "en");
+  // Lower temperature = fewer "helpful" rewrites, closer to what was actually
+  // said (useful for honest speaking assessment).
+  openaiForm.append("temperature", "0");
 
   try {
     const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {

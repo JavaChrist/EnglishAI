@@ -4,22 +4,12 @@ import { redirect } from "next/navigation";
 
 import { AppHeader } from "@/components/app-header";
 import { Progress } from "@/components/ui/progress";
-import { BADGES } from "@/lib/constants";
+import { BADGE_GROUPS, BADGE_TIERS, BADGES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Badges",
-};
-
-const DESCRIPTIONS: Record<string, string> = {
-  first_conversation: "Finish your first conversation.",
-  "7_day_streak": "Practice 7 days in a row.",
-  "100_words_heard": "Collect 100 words in your vocabulary.",
-  travel_ready: "Complete a Travel conversation.",
-  native_listener: "Finish a Listening Room session.",
-  motorcycle_talker: "Complete a Motorcycles conversation.",
-  business_starter: "Complete a Business conversation.",
 };
 
 function formatDate(iso: string): string {
@@ -54,11 +44,12 @@ export default async function BadgesPage() {
   return (
     <div className="flex min-h-dvh flex-col">
       <AppHeader />
-      <main className="mx-auto w-full max-w-3xl flex-1 space-y-6 px-4 py-8">
+      <main className="mx-auto w-full max-w-4xl flex-1 space-y-8 px-4 py-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Badges</h1>
           <p className="text-muted-foreground">
-            Milestones you unlock as you learn.
+            Small milestones across every activity — climb from bronze to
+            diamond.
           </p>
         </div>
 
@@ -70,60 +61,111 @@ export default async function BadgesPage() {
             </span>
           </div>
           <Progress value={progress} />
+          <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+            {(
+              Object.entries(BADGE_TIERS) as [
+                keyof typeof BADGE_TIERS,
+                (typeof BADGE_TIERS)[keyof typeof BADGE_TIERS],
+              ][]
+            )
+              .sort((a, b) => a[1].rank - b[1].rank)
+              .map(([tier, style]) => (
+                <span key={tier} className="flex items-center gap-1.5">
+                  <span
+                    className={cn(
+                      "size-3 rounded-full border",
+                      style.bg,
+                      style.ring,
+                    )}
+                  />
+                  {style.label}
+                </span>
+              ))}
+          </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {BADGES.map((badge) => {
-            const Icon = badge.icon;
-            const unlockedAt = earnedMap.get(badge.key);
-            const unlocked = Boolean(unlockedAt);
-            return (
-              <div
-                key={badge.key}
-                className={cn(
-                  "flex flex-col items-center gap-3 rounded-2xl border p-5 text-center transition-colors",
-                  unlocked
-                    ? "border-primary/40 bg-card"
-                    : "border-border/60 bg-muted/30",
-                )}
-              >
-                <span
-                  className={cn(
-                    "relative flex size-16 items-center justify-center rounded-2xl",
-                    unlocked
-                      ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground/50",
-                  )}
-                >
-                  <Icon className="size-8" />
-                  {!unlocked && (
-                    <span className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground">
-                      <Lock className="size-3" />
-                    </span>
-                  )}
+        {BADGE_GROUPS.map((group) => {
+          const items = BADGES.filter((b) => b.group === group);
+          if (items.length === 0) return null;
+          const groupUnlocked = items.filter((b) =>
+            earnedMap.has(b.key),
+          ).length;
+          return (
+            <section key={group} className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">{group}</h2>
+                <span className="text-xs text-muted-foreground">
+                  {groupUnlocked} / {items.length}
                 </span>
-                <div className="space-y-1">
-                  <p
-                    className={cn(
-                      "font-semibold",
-                      !unlocked && "text-muted-foreground",
-                    )}
-                  >
-                    {badge.label}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {DESCRIPTIONS[badge.key] ?? ""}
-                  </p>
-                  {unlockedAt && (
-                    <p className="text-xs font-medium text-primary">
-                      Unlocked {formatDate(unlockedAt)}
-                    </p>
-                  )}
-                </div>
               </div>
-            );
-          })}
-        </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {items.map((badge) => {
+                  const Icon = badge.icon;
+                  const unlockedAt = earnedMap.get(badge.key);
+                  const unlocked = Boolean(unlockedAt);
+                  const tier = BADGE_TIERS[badge.tier];
+                  return (
+                    <div
+                      key={badge.key}
+                      className={cn(
+                        "flex items-center gap-3 rounded-2xl border p-4 transition-colors",
+                        unlocked
+                          ? cn("bg-card", tier.ring)
+                          : "border-border/60 bg-muted/30",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "relative flex size-12 shrink-0 items-center justify-center rounded-xl",
+                          unlocked
+                            ? cn(tier.bg, tier.icon)
+                            : "bg-muted text-muted-foreground/50",
+                        )}
+                      >
+                        <Icon className="size-6" />
+                        {!unlocked && (
+                          <span className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground">
+                            <Lock className="size-2.5" />
+                          </span>
+                        )}
+                      </span>
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <p
+                            className={cn(
+                              "truncate text-sm font-semibold",
+                              !unlocked && "text-muted-foreground",
+                            )}
+                          >
+                            {badge.label}
+                          </p>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                              unlocked
+                                ? cn(tier.icon, tier.ring)
+                                : "border-border/60 text-muted-foreground/60",
+                            )}
+                          >
+                            {tier.label}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {badge.description}
+                        </p>
+                        {unlockedAt && (
+                          <p className={cn("text-xs font-medium", tier.icon)}>
+                            {formatDate(unlockedAt)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
       </main>
     </div>
   );

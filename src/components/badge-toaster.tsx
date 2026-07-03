@@ -3,7 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 
-import { BADGES } from "@/lib/constants";
+import { BADGE_TIERS, BADGES } from "@/lib/constants";
 
 const BADGE_MAP = new Map<string, (typeof BADGES)[number]>(
   BADGES.map((b) => [b.key, b]),
@@ -31,10 +31,11 @@ export function BadgeToaster() {
           const badge = BADGE_MAP.get(key);
           if (!badge) return;
           const Icon = badge.icon;
+          const tier = BADGE_TIERS[badge.tier];
           window.setTimeout(() => {
-            toast.success("Badge unlocked!", {
+            toast.success(`${tier.label} badge unlocked!`, {
               description: badge.label,
-              icon: <Icon className="size-5 text-primary" />,
+              icon: <Icon className={`size-5 ${tier.icon}`} />,
               duration: 5000,
             });
           }, i * 700);

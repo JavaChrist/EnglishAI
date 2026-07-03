@@ -6,6 +6,7 @@ import {
   GraduationCap,
   Headphones,
   MessageCircle,
+  Mic,
   Repeat,
   Sparkles,
   Trophy,
@@ -16,15 +17,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AppHeader } from "@/components/app-header";
+import { DailyReminder } from "@/components/reminders/daily-reminder";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { ProgressRing } from "@/components/ui/progress-ring";
 import { levelToCEFR } from "@/lib/ai/adaptation";
 import { BADGES, GOALS } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
@@ -69,19 +71,23 @@ export default async function DashboardPage() {
     .limit(1)
     .maybeSingle();
 
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const { count: sessionsToday } = await supabase
-    .from("conversations")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .gte("created_at", startOfToday.toISOString());
-
   const { count: reviewsDue } = await supabase
     .from("reviews")
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id)
     .lte("due_at", new Date().toISOString());
+
+  // Comprehensible input logged so far today (UTC day, matching streak logic).
+  const startOfUtcToday = new Date();
+  startOfUtcToday.setUTCHours(0, 0, 0, 0);
+  const { data: todayInput } = await supabase
+    .from("input_events")
+    .select("seconds")
+    .eq("user_id", user.id)
+    .gte("created_at", startOfUtcToday.toISOString());
+  const inputMinutesToday = Math.round(
+    (todayInput ?? []).reduce((sum, e) => sum + Number(e.seconds ?? 0), 0) / 60,
+  );
 
   const firstName =
     (profile?.display_name as string | null)?.trim() ||
@@ -95,12 +101,13 @@ export default async function DashboardPage() {
   const streak = Number(profile?.streak_current ?? 0);
   const xp = Number(profile?.xp_total ?? 0);
   const dailyMinutes = Number(lang?.daily_minutes ?? 10);
-  const inputMinutes = Math.round(Number(profile?.input_seconds ?? 0) / 60);
   const goalLabel = GOALS.find((g) => g.key === lang?.goal)?.label;
 
-  const doneToday = Number(sessionsToday ?? 0);
-  const dailyTarget = Math.max(1, Math.round(dailyMinutes / 10));
-  const goalProgress = Math.min(100, Math.round((doneToday / dailyTarget) * 100));
+  const goalReached = inputMinutesToday >= dailyMinutes;
+  const goalProgress = Math.min(
+    100,
+    Math.round((inputMinutesToday / Math.max(1, dailyMinutes)) * 100),
+  );
 
   const badge = lastBadge
     ? BADGES.find((b) => b.key === lastBadge.badge_key)
@@ -118,6 +125,12 @@ export default async function DashboardPage() {
       icon: Headphones,
       title: "Listening Session",
       description: "Train your ear with real audio.",
+    },
+    {
+      href: "/speaking",
+      icon: Mic,
+      title: "Speaking Room",
+      description: "Practice speaking and get feedback.",
     },
     {
       href: "/reading",
@@ -154,43 +167,43 @@ export default async function DashboardPage() {
 
         {/* Today's Goal */}
         <Card className="overflow-hidden">
-          <div className="grid gap-4 p-2 sm:grid-cols-[1fr_auto] sm:items-center">
-            <CardHeader className="p-4">
-              <div className="mb-1 flex items-center gap-2 text-sm font-medium text-primary">
-                <Sparkles className="size-4" /> Today&apos;s Goal
+          <div className="grid gap-4 p-4 sm:grid-cols-[auto_1fr] sm:items-center">
+            <div className="flex justify-center">
+              <ProgressRing value={goalProgress}>
+                <span className="text-2xl font-bold leading-none">
+                  {inputMinutesToday}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  / {dailyMinutes} min
+                </span>
+              </ProgressRing>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <div className="mb-1 flex items-center gap-2 text-sm font-medium text-primary">
+                  <Sparkles className="size-4" /> Today&apos;s Goal
+                </div>
+                <CardTitle className="text-xl">
+                  {goalReached
+                    ? "Goal reached — great work!"
+                    : `${dailyMinutes} minutes of English input`}
+                </CardTitle>
+                <CardDescription>
+                  {goalReached
+                    ? "You've hit today's input target. Every extra minute compounds."
+                    : "In Krashen's model, daily comprehensible input drives acquisition. Keep the streak alive."}
+                </CardDescription>
               </div>
-              <CardTitle className="text-xl">
-                {dailyMinutes} minutes of English
-              </CardTitle>
-              <CardDescription>
-                A short daily session keeps your acquisition growing. Let&apos;s
-                start with a conversation.
-              </CardDescription>
-              <div className="mt-3">
-                <Progress value={goalProgress} />
-                <p className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    {doneToday >= dailyTarget
-                      ? "Goal reached today — nice work!"
-                      : `${doneToday} / ${dailyTarget} session${
-                          dailyTarget > 1 ? "s" : ""
-                        } today`}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Sparkles className="size-3" />
-                    {inputMinutes} min of input
-                  </span>
-                </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="lg"
+                  className="h-11 px-6"
+                  render={<Link href="/conversation" />}
+                >
+                  Start now
+                </Button>
+                <DailyReminder goalReached={goalReached} />
               </div>
-            </CardHeader>
-            <div className="p-4">
-              <Button
-                size="lg"
-                className="h-12 w-full px-8 text-base sm:w-auto"
-                render={<Link href="/conversation" />}
-              >
-                Start now
-              </Button>
             </div>
           </div>
         </Card>
