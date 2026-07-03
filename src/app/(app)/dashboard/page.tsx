@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { levelToCEFR } from "@/lib/ai/adaptation";
-import { GOALS } from "@/lib/constants";
+import { BADGES, GOALS } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -57,6 +57,28 @@ export default async function DashboardPage() {
     .eq("user_id", user.id)
     .maybeSingle();
 
+  const { data: lastBadge } = await supabase
+    .from("achievements")
+    .select("badge_key, unlocked_at")
+    .eq("user_id", user.id)
+    .order("unlocked_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const { count: sessionsToday } = await supabase
+    .from("conversations")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .gte("created_at", startOfToday.toISOString());
+
+  const { count: reviewsDue } = await supabase
+    .from("reviews")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .lte("due_at", new Date().toISOString());
+
   const firstName =
     (profile?.display_name as string | null)?.trim() ||
     (user.user_metadata?.first_name as string | undefined)?.trim() ||
@@ -70,6 +92,14 @@ export default async function DashboardPage() {
   const xp = Number(profile?.xp_total ?? 0);
   const dailyMinutes = Number(lang?.daily_minutes ?? 10);
   const goalLabel = GOALS.find((g) => g.key === lang?.goal)?.label;
+
+  const doneToday = Number(sessionsToday ?? 0);
+  const dailyTarget = Math.max(1, Math.round(dailyMinutes / 10));
+  const goalProgress = Math.min(100, Math.round((doneToday / dailyTarget) * 100));
+
+  const badge = lastBadge
+    ? BADGES.find((b) => b.key === lastBadge.badge_key)
+    : undefined;
 
   const actions = [
     {
@@ -88,7 +118,12 @@ export default async function DashboardPage() {
       href: "/review",
       icon: Repeat,
       title: "Reviews Due",
-      description: "Bring back what you've learned.",
+      description:
+        Number(reviewsDue ?? 0) > 0
+          ? `${reviewsDue} word${
+              Number(reviewsDue) > 1 ? "s" : ""
+            } ready to review.`
+          : "Bring back what you've learned.",
     },
   ];
 
@@ -123,9 +158,13 @@ export default async function DashboardPage() {
                 start with a conversation.
               </CardDescription>
               <div className="mt-3">
-                <Progress value={0} />
+                <Progress value={goalProgress} />
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  0 / {dailyMinutes} min today
+                  {doneToday >= dailyTarget
+                    ? "Goal reached today — nice work! 🎉"
+                    : `${doneToday} / ${dailyTarget} session${
+                        dailyTarget > 1 ? "s" : ""
+                      } today`}
                 </p>
               </div>
             </CardHeader>
@@ -201,14 +240,25 @@ export default async function DashboardPage() {
         {/* Last badge */}
         <Card>
           <CardHeader className="flex-row items-center gap-4">
-            <div className="flex size-12 items-center justify-center rounded-xl bg-accent text-primary">
-              <Trophy className="size-6" />
+            <div className="flex size-12 items-center justify-center rounded-xl bg-accent text-2xl text-primary">
+              {badge ? <span>{badge.emoji}</span> : <Trophy className="size-6" />}
             </div>
             <div>
-              <CardTitle>Your first badge is waiting</CardTitle>
-              <CardDescription>
-                Finish your first conversation to unlock it.
-              </CardDescription>
+              {badge ? (
+                <>
+                  <CardTitle>Latest badge: {badge.label}</CardTitle>
+                  <CardDescription>
+                    Keep practicing to unlock more.
+                  </CardDescription>
+                </>
+              ) : (
+                <>
+                  <CardTitle>Your first badge is waiting</CardTitle>
+                  <CardDescription>
+                    Finish your first conversation to unlock it.
+                  </CardDescription>
+                </>
+              )}
             </div>
           </CardHeader>
         </Card>

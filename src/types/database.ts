@@ -27,6 +27,8 @@ export interface UsersProfile {
   streak_longest: number;
   acquisition_index: number;
   xp_total: number;
+  onboarded: boolean;
+  last_active_on: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -53,6 +55,7 @@ export interface Conversation {
   user_id: string;
   scenario: string;
   status: "active" | "completed";
+  progress_awarded: boolean;
   created_at: string;
   completed_at: string | null;
 }

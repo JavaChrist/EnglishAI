@@ -2,7 +2,15 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { ArrowLeft, Loader2, Mic, Send, Square, Volume2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Languages,
+  Loader2,
+  Mic,
+  Send,
+  Square,
+  Volume2,
+} from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
@@ -37,6 +45,9 @@ export function ConversationChat({
   const [input, setInput] = React.useState("");
   const [transcribing, setTranscribing] = React.useState(false);
   const [micHint, setMicHint] = React.useState<string | null>(null);
+  const [translations, setTranslations] = React.useState<
+    Record<string, { text?: string; open: boolean; loading: boolean }>
+  >({});
   const endRef = React.useRef<HTMLDivElement>(null);
   const spokenRef = React.useRef<Set<string>>(new Set());
 
@@ -114,6 +125,48 @@ export function ConversationChat({
   );
 
   const recorder = useRecorder({ onRecorded: handleRecorded });
+
+  const toggleTranslate = React.useCallback(
+    async (id: string, text: string) => {
+      const current = translations[id];
+      if (current?.text) {
+        setTranslations((prev) => ({
+          ...prev,
+          [id]: { ...current, open: !current.open },
+        }));
+        return;
+      }
+
+      setTranslations((prev) => ({
+        ...prev,
+        [id]: { open: true, loading: true },
+      }));
+      try {
+        const res = await fetch("/api/ai/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        if (!res.ok) throw new Error(`Translate ${res.status}`);
+        const { text: french } = (await res.json()) as { text: string };
+        setTranslations((prev) => ({
+          ...prev,
+          [id]: { text: french, open: true, loading: false },
+        }));
+      } catch (err) {
+        console.error("[translate] failed", err);
+        setTranslations((prev) => ({
+          ...prev,
+          [id]: {
+            text: "Traduction indisponible pour le moment.",
+            open: true,
+            loading: false,
+          },
+        }));
+      }
+    },
+    [translations],
+  );
 
   // Auto-speak the coach's replies once generation settles.
   React.useEffect(() => {
@@ -231,8 +284,29 @@ export function ConversationChat({
                         <Volume2 className="size-3.5" />
                         Slow
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                        onClick={() => void toggleTranslate(message.id, text)}
+                        aria-label="Translate to French"
+                      >
+                        {translations[message.id]?.loading ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Languages className="size-3.5" />
+                        )}
+                        FR
+                      </Button>
                     </div>
                   )}
+                  {!isUser &&
+                    translations[message.id]?.open &&
+                    translations[message.id]?.text && (
+                      <div className="max-w-[80%] rounded-2xl rounded-bl-sm border border-border/60 bg-background px-4 py-2 text-sm italic text-muted-foreground">
+                        {translations[message.id]?.text}
+                      </div>
+                    )}
                 </div>
               </div>
             );

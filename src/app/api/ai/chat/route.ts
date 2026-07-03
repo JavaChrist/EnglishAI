@@ -9,6 +9,8 @@ import {
 
 import { analyzeTurn, buildTranscript } from "@/lib/ai/analyze";
 import { buildConversationSystemPrompt } from "@/lib/ai/prompt";
+import { awardConversationProgress } from "@/lib/progress/award";
+import { captureVocabulary } from "@/lib/progress/vocab";
 import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 30;
@@ -99,15 +101,32 @@ export async function POST(req: Request) {
         const hasLearnerTurn = finalMessages.some((m) => m.role === "user");
         if (hasLearnerTurn) {
           const transcript = buildTranscript(finalMessages);
-          const newLevel = await analyzeTurn(transcript, currentLevel);
-          if (newLevel !== null && newLevel !== currentLevel) {
-            await supabase
-              .from("language_profile")
-              .update({
-                estimated_level: newLevel,
-                difficulty_updated_at: new Date().toISOString(),
-              })
-              .eq("user_id", user.id);
+          const analysis = await analyzeTurn(transcript, currentLevel);
+          if (analysis) {
+            if (analysis.level !== currentLevel) {
+              await supabase
+                .from("language_profile")
+                .update({
+                  estimated_level: analysis.level,
+                  difficulty_updated_at: new Date().toISOString(),
+                })
+                .eq("user_id", user.id);
+            }
+
+            // Capture i+1 vocabulary and schedule spaced-repetition reviews.
+            try {
+              await captureVocabulary(supabase, user.id, analysis.vocab);
+            } catch (error) {
+              console.error("[chat] vocab capture failed", error);
+            }
+          }
+
+          // Progression & gamification (XP, streak, badge) — granted once
+          // per conversation via an atomic claim.
+          try {
+            await awardConversationProgress(supabase, user.id, conversationId);
+          } catch (error) {
+            console.error("[chat] progression failed", error);
           }
         }
       },

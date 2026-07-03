@@ -15,7 +15,10 @@ function stripForSpeech(text: string): string {
     .trim();
 }
 
-export async function POST(req: Request) {
+async function synthesize(
+  rawText: string,
+  voice: "male" | "female",
+): Promise<Response> {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     return new Response("Text-to-speech is not configured.", { status: 503 });
@@ -29,24 +32,22 @@ export async function POST(req: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { text, voice } = (await req.json()) as {
-    text?: string;
-    voice?: "male" | "female";
-  };
-
-  const clean = stripForSpeech(text ?? "").slice(0, 800);
+  const clean = stripForSpeech(rawText).slice(0, 800);
   if (!clean) {
     return new Response("No text to speak.", { status: 400 });
   }
 
-  const voiceId =
-    VOICE_ENV[voice ?? "female"] ?? VOICE_ENV.female ?? VOICE_ENV.male;
+  const voiceId = VOICE_ENV[voice] ?? VOICE_ENV.female ?? VOICE_ENV.male;
   if (!voiceId) {
     return new Response("No ElevenLabs voice configured.", { status: 503 });
   }
 
+  const modelId = process.env.ELEVENLABS_MODEL ?? "eleven_turbo_v2_5";
+
+  // /stream + optimize_streaming_latency = lower time-to-first-byte so the
+  // browser can start playing almost immediately.
   const elevenRes = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?optimize_streaming_latency=3&output_format=mp3_44100_128`,
     {
       method: "POST",
       headers: {
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         text: clean,
-        model_id: "eleven_multilingual_v2",
+        model_id: modelId,
         voice_settings: { stability: 0.5, similarity_boost: 0.75 },
       }),
     },
@@ -74,4 +75,20 @@ export async function POST(req: Request) {
       "Cache-Control": "private, max-age=86400",
     },
   });
+}
+
+/** GET lets an <audio> element stream directly (progressive playback). */
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const text = searchParams.get("text") ?? "";
+  const voice = (searchParams.get("voice") as "male" | "female") ?? "female";
+  return synthesize(text, voice);
+}
+
+export async function POST(req: Request) {
+  const { text, voice } = (await req.json()) as {
+    text?: string;
+    voice?: "male" | "female";
+  };
+  return synthesize(text ?? "", voice ?? "female");
 }

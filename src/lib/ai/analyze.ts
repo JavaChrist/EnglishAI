@@ -24,7 +24,25 @@ const signalsSchema = z.object({
     .describe(
       "true if the learner seemed lost, confused, or asked to slow down / repeat / simplify.",
     ),
+  newVocabulary: z
+    .array(
+      z.object({
+        term: z.string().describe("English word or short phrase (2-3 words)."),
+        translation: z.string().describe("Concise French translation."),
+      }),
+    )
+    .max(3)
+    .describe(
+      "0-3 useful English words/short phrases from the COACH's messages that are slightly above the learner's current level (i+1). Pick meaningful content words worth remembering; skip trivial words the learner clearly knows. Empty if nothing worthwhile.",
+    ),
 });
+
+export type VocabItem = { term: string; translation: string };
+
+export type TurnAnalysis = {
+  level: number;
+  vocab: VocabItem[];
+};
 
 /** Build a compact transcript of the most recent turns for assessment. */
 export function buildTranscript(messages: UIMessage[], maxTurns = 6): string {
@@ -42,27 +60,36 @@ export function buildTranscript(messages: UIMessage[], maxTurns = 6): string {
 }
 
 /**
- * Assess the learner's latest performance and return the adjusted
- * continuous level (Krashen i+1). Returns null if assessment failed.
+ * Assess the learner's latest performance (Krashen i+1) and extract useful
+ * vocabulary they were exposed to. Returns null if assessment failed.
  */
 export async function analyzeTurn(
   transcript: string,
   currentLevel: number,
-): Promise<number | null> {
+): Promise<TurnAnalysis | null> {
   try {
     const { output } = await generateText({
       model: openai(process.env.OPENAI_MODEL ?? "gpt-4o-mini"),
       output: Output.object({ schema: signalsSchema }),
       system:
-        "You are a concise English-learning assessment engine. Assess ONLY the learner's (user) messages, not the coach's. Be calibrated and fair.",
-      prompt: `Conversation transcript:\n\n${transcript}\n\nAssess the learner's latest performance.`,
+        "You are a concise English-learning assessment engine. Assess ONLY the learner's (user) messages, not the coach's. Be calibrated and fair. Also extract a few useful vocabulary items the learner is being exposed to.",
+      prompt: `Conversation transcript:\n\n${transcript}\n\nAssess the learner's latest performance and extract i+1 vocabulary.`,
     });
 
-    return nextEstimatedLevel(currentLevel, {
+    const level = nextEstimatedLevel(currentLevel, {
       comprehension: output.comprehension,
       fluency: output.fluency,
       askedToSimplify: output.askedToSimplify,
     });
+
+    const vocab = (output.newVocabulary ?? [])
+      .map((v) => ({
+        term: v.term.trim(),
+        translation: v.translation.trim(),
+      }))
+      .filter((v) => v.term.length > 1 && v.translation.length > 0);
+
+    return { level, vocab };
   } catch (error) {
     console.error("[analyzeTurn] adaptation failed", error);
     return null;
