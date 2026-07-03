@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   ChevronRight,
   Flame,
   Gauge,
@@ -44,7 +45,9 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from("users_profile")
-    .select("onboarded, display_name, streak_current, acquisition_index, xp_total")
+    .select(
+      "onboarded, display_name, streak_current, acquisition_index, xp_total, input_seconds",
+    )
     .eq("id", user.id)
     .maybeSingle();
 
@@ -92,6 +95,7 @@ export default async function DashboardPage() {
   const streak = Number(profile?.streak_current ?? 0);
   const xp = Number(profile?.xp_total ?? 0);
   const dailyMinutes = Number(lang?.daily_minutes ?? 10);
+  const inputMinutes = Math.round(Number(profile?.input_seconds ?? 0) / 60);
   const goalLabel = GOALS.find((g) => g.key === lang?.goal)?.label;
 
   const doneToday = Number(sessionsToday ?? 0);
@@ -114,6 +118,12 @@ export default async function DashboardPage() {
       icon: Headphones,
       title: "Listening Session",
       description: "Train your ear with real audio.",
+    },
+    {
+      href: "/reading",
+      icon: BookOpen,
+      title: "Reading Room",
+      description: "Read a story at your level.",
     },
     {
       href: "/review",
@@ -158,12 +168,18 @@ export default async function DashboardPage() {
               </CardDescription>
               <div className="mt-3">
                 <Progress value={goalProgress} />
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  {doneToday >= dailyTarget
-                    ? "Goal reached today — nice work!"
-                    : `${doneToday} / ${dailyTarget} session${
-                        dailyTarget > 1 ? "s" : ""
-                      } today`}
+                <p className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    {doneToday >= dailyTarget
+                      ? "Goal reached today — nice work!"
+                      : `${doneToday} / ${dailyTarget} session${
+                          dailyTarget > 1 ? "s" : ""
+                        } today`}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="size-3" />
+                    {inputMinutes} min of input
+                  </span>
                 </p>
               </div>
             </CardHeader>
@@ -220,7 +236,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Actions */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {actions.map(({ href, icon: Icon, title, description }) => (
             <Link key={href} href={href} className="group">
               <Card className="h-full transition-all group-hover:border-primary/60 group-hover:ring-primary/30">

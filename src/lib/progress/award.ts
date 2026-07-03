@@ -39,6 +39,25 @@ export async function addXp(
     .eq("id", userId);
 }
 
+/** Add to the learner's lifetime comprehensible-input counter (in seconds). */
+export async function addInputSeconds(
+  supabase: SupabaseServerClient,
+  userId: string,
+  seconds: number,
+): Promise<void> {
+  const s = Math.round(seconds);
+  if (s <= 0) return;
+  const { data } = await supabase
+    .from("users_profile")
+    .select("input_seconds")
+    .eq("id", userId)
+    .maybeSingle();
+  await supabase
+    .from("users_profile")
+    .update({ input_seconds: Number(data?.input_seconds ?? 0) + s })
+    .eq("id", userId);
+}
+
 /**
  * Update the daily streak (once per day) and recompute the Acquisition Index.
  * Idempotent within the same UTC day.

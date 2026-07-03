@@ -3,6 +3,7 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 
 import { difficultyBrief } from "@/lib/ai/adaptation";
+import { getReviewWords } from "@/lib/progress/review-words";
 import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 45;
@@ -50,7 +51,10 @@ export async function POST(req: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { duration } = (await req.json()) as { duration?: number };
+  const { duration, topic } = (await req.json()) as {
+    duration?: number;
+    topic?: string;
+  };
   const seconds = [30, 60, 120].includes(Number(duration))
     ? Number(duration)
     : 60;
@@ -64,6 +68,20 @@ export async function POST(req: Request) {
 
   const level = Number(lang?.estimated_level ?? 25);
   const interests = ((lang?.interests as string[] | null) ?? []).join(", ");
+  const reviewWords = await getReviewWords(supabase, user.id);
+
+  // Narrow input: when the learner asks for "more on the same topic", keep the
+  // subject fixed so vocabulary repeats in fresh contexts (Krashen).
+  const topicLine =
+    topic && topic.trim()
+      ? `Stay on this specific topic (a fresh angle, not a repeat): "${topic.trim()}".`
+      : interests
+        ? `Favor a topic the learner enjoys: ${interests}.`
+        : "";
+  const recycleLine =
+    reviewWords.length > 0
+      ? `Naturally reuse a few of these words the learner is reviewing when they fit: ${reviewWords.join(", ")}.`
+      : "";
 
   try {
     const { output } = await generateText({
@@ -73,7 +91,8 @@ export async function POST(req: Request) {
 Write a short, natural two-person dialogue (speakers A and B) in English.
 Difficulty target (Krashen i+1): ${difficultyBrief(level)}
 Keep it engaging and realistic. Aim for about ${targetWords} words total so it lasts ~${seconds}s when spoken.
-${interests ? `Favor a topic the learner enjoys: ${interests}.` : ""}
+${topicLine}
+${recycleLine}
 Then write ${seconds <= 30 ? 2 : 3} comprehension questions (4 options, one correct), a one-sentence summary, and key vocabulary with French translations.`,
       prompt: "Generate the listening clip now.",
     });

@@ -78,7 +78,15 @@ export const XP_REWARDS = {
   speaking: 15,
   memory: 10,
   review: 10,
+  reading: 15,
 } as const;
+
+/** Reading Room passage lengths (approx. word counts). */
+export const READING_LENGTHS = [
+  { key: "short", label: "Short", words: 120, hint: "~1 min" },
+  { key: "medium", label: "Medium", words: 250, hint: "~2 min" },
+  { key: "long", label: "Long", words: 450, hint: "~4 min" },
+] as const;
 
 /** Two ElevenLabs voices only. */
 export const VOICES = [

@@ -48,7 +48,11 @@ export async function evaluateBadges(
 
   if (grant.size === 0) return [];
 
-  const rows = [...grant].map((badge_key) => ({ user_id: userId, badge_key }));
+  const rows = [...grant].map((badge_key) => ({
+    user_id: userId,
+    badge_key,
+    seen: false,
+  }));
   const { data: inserted } = await supabase
     .from("achievements")
     .upsert(rows, { onConflict: "user_id,badge_key", ignoreDuplicates: true })

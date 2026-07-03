@@ -9,7 +9,8 @@ import {
 
 import { analyzeTurn, buildTranscript } from "@/lib/ai/analyze";
 import { buildConversationSystemPrompt } from "@/lib/ai/prompt";
-import { awardConversationProgress } from "@/lib/progress/award";
+import { addInputSeconds, awardConversationProgress } from "@/lib/progress/award";
+import { getReviewWords } from "@/lib/progress/review-words";
 import { captureVocabulary } from "@/lib/progress/vocab";
 import { createClient } from "@/lib/supabase/server";
 
@@ -57,12 +58,14 @@ export async function POST(req: Request) {
     "there";
 
   const currentLevel = Number(lang?.estimated_level ?? 25);
+  const reviewWords = await getReviewWords(supabase, user.id);
 
   const system = buildConversationSystemPrompt({
     scenarioKey: scenario,
     estimatedLevel: currentLevel,
     interests: (lang?.interests as string[] | null) ?? [],
     firstName,
+    reviewWords,
   });
 
   const result = streamText({
@@ -100,6 +103,21 @@ export async function POST(req: Request) {
         // delays what the learner sees.
         const hasLearnerTurn = finalMessages.some((m) => m.role === "user");
         if (hasLearnerTurn) {
+          // Count the coach's latest reply as comprehensible input (~2.5 wps).
+          const lastCoach = [...finalMessages]
+            .reverse()
+            .find((m) => m.role === "assistant");
+          if (lastCoach) {
+            const words = extractText(lastCoach)
+              .split(/\s+/)
+              .filter(Boolean).length;
+            try {
+              await addInputSeconds(supabase, user.id, words / 2.5);
+            } catch (error) {
+              console.error("[chat] input tracking failed", error);
+            }
+          }
+
           const transcript = buildTranscript(finalMessages);
           const analysis = await analyzeTurn(transcript, currentLevel);
           if (analysis) {

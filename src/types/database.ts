@@ -17,7 +17,8 @@ export type XpSource =
   | "listening"
   | "speaking"
   | "memory"
-  | "review";
+  | "review"
+  | "reading";
 
 export interface UsersProfile {
   id: string;
@@ -27,6 +28,7 @@ export interface UsersProfile {
   streak_longest: number;
   acquisition_index: number;
   xp_total: number;
+  input_seconds: number;
   onboarded: boolean;
   last_active_on: string | null;
   created_at: string;

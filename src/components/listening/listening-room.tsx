@@ -46,10 +46,12 @@ export function ListeningRoom({ voice }: { voice: "male" | "female" }) {
   const [lineProgress, setLineProgress] = React.useState(0);
   const [showTranscript, setShowTranscript] = React.useState(false);
 
+  const [duration, setDuration] = React.useState(60);
   const [qIndex, setQIndex] = React.useState(0);
   const [selected, setSelected] = React.useState<number | null>(null);
   const [answered, setAnswered] = React.useState(false);
   const [correctCount, setCorrectCount] = React.useState(0);
+  const [quizTaken, setQuizTaken] = React.useState(false);
 
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const pausedRef = React.useRef(false);
@@ -200,7 +202,7 @@ export function ListeningRoom({ voice }: { voice: "male" | "female" }) {
     };
   }, [clearAudioCache]);
 
-  async function generate(duration: number) {
+  async function generate(dur: number, topic?: string) {
     pausedRef.current = true;
     audioRef.current?.pause();
     clearAudioCache();
@@ -208,12 +210,13 @@ export function ListeningRoom({ voice }: { voice: "male" | "female" }) {
     setCurrentLine(-1);
     setLineProgress(0);
     setError(null);
+    setDuration(dur);
     setPhase("loading");
     try {
       const res = await fetch("/api/listening/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ duration }),
+        body: JSON.stringify({ duration: dur, topic }),
       });
       if (!res.ok) throw new Error(`Generate ${res.status}`);
       const data = (await res.json()) as Clip;
@@ -223,12 +226,34 @@ export function ListeningRoom({ voice }: { voice: "male" | "female" }) {
       setSelected(null);
       setAnswered(false);
       setCorrectCount(0);
+      setQuizTaken(false);
       setPhase("listen");
     } catch (err) {
       console.error("[listening] generate failed", err);
       setError("Couldn't generate a clip. Please try again.");
       setPhase("pick");
     }
+  }
+
+  async function complete() {
+    if (!clip) return;
+    try {
+      await fetch("/api/listening/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keywords: clip.keywords, duration }),
+      });
+    } catch (err) {
+      console.error("[listening] complete failed", err);
+    }
+  }
+
+  function finishListenOnly() {
+    pausedRef.current = true;
+    audioRef.current?.pause();
+    setQuizTaken(false);
+    setPhase("done");
+    void complete();
   }
 
   function answer(i: number) {
@@ -247,16 +272,9 @@ export function ListeningRoom({ voice }: { voice: "male" | "female" }) {
     if (qIndex < clip.questions.length - 1) {
       setQIndex((q) => q + 1);
     } else {
+      setQuizTaken(true);
       setPhase("done");
-      try {
-        await fetch("/api/listening/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ keywords: clip.keywords }),
-        });
-      } catch (err) {
-        console.error("[listening] complete failed", err);
-      }
+      await complete();
     }
   }
 
@@ -443,9 +461,18 @@ export function ListeningRoom({ voice }: { voice: "male" | "female" }) {
           )}
         </div>
 
-        <Button className="h-12" onClick={() => setPhase("quiz")}>
-          I&apos;m ready — check my understanding
-        </Button>
+        <div className="flex flex-col gap-2">
+          <Button className="h-12" onClick={() => setPhase("quiz")}>
+            I&apos;m ready — check my understanding
+          </Button>
+          <Button
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={finishListenOnly}
+          >
+            Just listening today — finish
+          </Button>
+        </div>
       </main>
     );
   }
@@ -525,8 +552,9 @@ export function ListeningRoom({ voice }: { voice: "male" | "female" }) {
           Nice listening!
         </h1>
         <p className="text-muted-foreground">
-          {correctCount} / {clip.questions.length} correct · +
-          {XP_REWARDS.listening} XP
+          {quizTaken
+            ? `${correctCount} / ${clip.questions.length} correct · +${XP_REWARDS.listening} XP`
+            : `+${XP_REWARDS.listening} XP`}
         </p>
       </div>
 
@@ -562,13 +590,25 @@ export function ListeningRoom({ voice }: { voice: "male" | "female" }) {
         </ul>
       </div>
 
-      <div className="flex gap-2">
-        <Button className="flex-1" onClick={() => setPhase("pick")}>
-          Another clip
+      <div className="flex flex-col gap-2">
+        <Button
+          className="h-11"
+          onClick={() => void generate(duration, clip.title)}
+        >
+          More on this topic
         </Button>
-        <Button variant="outline" render={<Link href="/dashboard" />}>
-          Dashboard
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => setPhase("pick")}
+          >
+            New clip
+          </Button>
+          <Button variant="outline" render={<Link href="/dashboard" />}>
+            Dashboard
+          </Button>
+        </div>
       </div>
     </main>
   );
