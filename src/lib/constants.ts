@@ -36,6 +36,7 @@ import type { CEFRLevel } from "@/types/database";
 
 /** Conversation Lab scenarios (spec). */
 export const SCENARIOS = [
+  { key: "story", label: "Story Time", icon: Sparkles },
   { key: "coffee_shop", label: "Coffee Shop", icon: Coffee },
   { key: "airport", label: "Airport", icon: Plane },
   { key: "hotel", label: "Hotel", icon: Hotel },

@@ -43,7 +43,9 @@ export default function ConversationPage() {
                     </div>
                     <CardTitle>{scenario.label}</CardTitle>
                     <CardDescription>
-                      Practice a {scenario.label.toLowerCase()} conversation.
+                      {scenario.key === "story"
+                        ? "Listen to a short story and answer along the way."
+                        : `Practice a ${scenario.label.toLowerCase()} conversation.`}
                     </CardDescription>
                   </CardHeader>
                 </Card>
