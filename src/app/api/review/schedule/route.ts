@@ -1,4 +1,5 @@
 import { addXp, touchDailyStreak } from "@/lib/progress/award";
+import { evaluateBadges } from "@/lib/progress/badges";
 import { SRS_INTERVALS_MINUTES, XP_REWARDS } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
     try {
       await addXp(supabase, user.id, "review", XP_REWARDS.review);
       await touchDailyStreak(supabase, user.id);
+      await evaluateBadges(supabase, user.id);
     } catch (error) {
       console.error("[review/schedule] progression failed", error);
     }

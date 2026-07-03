@@ -1,17 +1,51 @@
+import {
+  Annoyed,
+  Bike,
+  Briefcase,
+  Clapperboard,
+  Coffee,
+  Dumbbell,
+  Ear,
+  FlaskConical,
+  Flame,
+  Frown,
+  Gamepad2,
+  Globe,
+  GraduationCap,
+  Headphones,
+  Hotel,
+  Laptop,
+  Laugh,
+  Leaf,
+  type LucideIcon,
+  Meh,
+  MessageCircle,
+  Music,
+  PartyPopper,
+  Plane,
+  ShoppingBag,
+  Smile,
+  Sparkles,
+  Stethoscope,
+  Trophy,
+  Users,
+  Utensils,
+} from "lucide-react";
+
 import type { CEFRLevel } from "@/types/database";
 
 /** Conversation Lab scenarios (spec). */
 export const SCENARIOS = [
-  { key: "coffee_shop", label: "Coffee Shop", emoji: "☕" },
-  { key: "airport", label: "Airport", emoji: "✈️" },
-  { key: "hotel", label: "Hotel", emoji: "🏨" },
-  { key: "motorcycles", label: "Motorcycles", emoji: "🏍️" },
-  { key: "restaurant", label: "Restaurant", emoji: "🍽️" },
-  { key: "shopping", label: "Shopping", emoji: "🛍️" },
-  { key: "business", label: "Business", emoji: "💼" },
-  { key: "small_talk", label: "Small Talk", emoji: "💬" },
-  { key: "doctor", label: "Doctor", emoji: "🩺" },
-  { key: "travel", label: "Travel", emoji: "🌍" },
+  { key: "coffee_shop", label: "Coffee Shop", icon: Coffee },
+  { key: "airport", label: "Airport", icon: Plane },
+  { key: "hotel", label: "Hotel", icon: Hotel },
+  { key: "motorcycles", label: "Motorcycles", icon: Bike },
+  { key: "restaurant", label: "Restaurant", icon: Utensils },
+  { key: "shopping", label: "Shopping", icon: ShoppingBag },
+  { key: "business", label: "Business", icon: Briefcase },
+  { key: "small_talk", label: "Small Talk", icon: MessageCircle },
+  { key: "doctor", label: "Doctor", icon: Stethoscope },
+  { key: "travel", label: "Travel", icon: Globe },
 ] as const;
 
 export type ScenarioKey = (typeof SCENARIOS)[number]["key"];
@@ -53,8 +87,8 @@ export const VOICES = [
 ] as const;
 
 export const ACCENTS = [
-  { key: "us", label: "American 🇺🇸" },
-  { key: "uk", label: "British 🇬🇧" },
+  { key: "us", label: "American" },
+  { key: "uk", label: "British" },
 ] as const;
 
 export const CEFR_LEVELS: { key: CEFRLevel; label: string }[] = [
@@ -68,50 +102,53 @@ export const CEFR_LEVELS: { key: CEFRLevel; label: string }[] = [
 
 /** Onboarding: learning goals. */
 export const GOALS = [
-  { key: "travel", label: "Travel the world", emoji: "🌍" },
-  { key: "work", label: "Work & business", emoji: "💼" },
-  { key: "social", label: "Chat & make friends", emoji: "💬" },
-  { key: "exams", label: "Pass an exam", emoji: "🎓" },
-  { key: "media", label: "Enjoy movies & media", emoji: "🎬" },
-  { key: "confidence", label: "Feel more confident", emoji: "✨" },
+  { key: "travel", label: "Travel the world", icon: Globe },
+  { key: "work", label: "Work & business", icon: Briefcase },
+  { key: "social", label: "Chat & make friends", icon: Users },
+  { key: "exams", label: "Pass an exam", icon: GraduationCap },
+  { key: "media", label: "Enjoy movies & media", icon: Clapperboard },
+  { key: "confidence", label: "Feel more confident", icon: Sparkles },
 ] as const;
 
 /** Onboarding: interests (feed the AI's comprehensible input). */
 export const INTERESTS = [
-  { key: "travel", label: "Travel", emoji: "✈️" },
-  { key: "food", label: "Food & cooking", emoji: "🍽️" },
-  { key: "business", label: "Business", emoji: "💼" },
-  { key: "tech", label: "Technology", emoji: "💻" },
-  { key: "motorcycles", label: "Motorcycles", emoji: "🏍️" },
-  { key: "sports", label: "Sports", emoji: "⚽" },
-  { key: "music", label: "Music", emoji: "🎵" },
-  { key: "movies", label: "Movies & series", emoji: "🎬" },
-  { key: "science", label: "Science", emoji: "🔬" },
-  { key: "health", label: "Health & fitness", emoji: "💪" },
-  { key: "gaming", label: "Gaming", emoji: "🎮" },
-  { key: "nature", label: "Nature", emoji: "🌿" },
+  { key: "travel", label: "Travel", icon: Plane },
+  { key: "food", label: "Food & cooking", icon: Utensils },
+  { key: "business", label: "Business", icon: Briefcase },
+  { key: "tech", label: "Technology", icon: Laptop },
+  { key: "motorcycles", label: "Motorcycles", icon: Bike },
+  { key: "sports", label: "Sports", icon: Trophy },
+  { key: "music", label: "Music", icon: Music },
+  { key: "movies", label: "Movies & series", icon: Clapperboard },
+  { key: "science", label: "Science", icon: FlaskConical },
+  { key: "health", label: "Health & fitness", icon: Dumbbell },
+  { key: "gaming", label: "Gaming", icon: Gamepad2 },
+  { key: "nature", label: "Nature", icon: Leaf },
 ] as const;
 
 /** Onboarding: daily time commitment (minutes). */
 export const DAILY_MINUTES_OPTIONS = [5, 10, 15, 30] as const;
 
 /** Onboarding: speaking confidence scale (1–5). */
-export const CONFIDENCE_LABELS: { value: number; label: string; emoji: string }[] =
-  [
-    { value: 1, label: "Very shy", emoji: "😰" },
-    { value: 2, label: "A bit nervous", emoji: "😅" },
-    { value: 3, label: "Okay", emoji: "🙂" },
-    { value: 4, label: "Pretty confident", emoji: "😃" },
-    { value: 5, label: "Very confident", emoji: "😎" },
-  ];
+export const CONFIDENCE_LABELS: {
+  value: number;
+  label: string;
+  icon: LucideIcon;
+}[] = [
+  { value: 1, label: "Very shy", icon: Frown },
+  { value: 2, label: "A bit nervous", icon: Annoyed },
+  { value: 3, label: "Okay", icon: Meh },
+  { value: 4, label: "Pretty confident", icon: Smile },
+  { value: 5, label: "Very confident", icon: Laugh },
+];
 
 /** Gamification badges (spec). */
 export const BADGES = [
-  { key: "first_conversation", label: "First Conversation", emoji: "🎉" },
-  { key: "7_day_streak", label: "7 Day Streak", emoji: "🔥" },
-  { key: "100_words_heard", label: "100 Words Heard", emoji: "👂" },
-  { key: "travel_ready", label: "Travel Ready", emoji: "🌍" },
-  { key: "native_listener", label: "Native Listener", emoji: "🎧" },
-  { key: "motorcycle_talker", label: "Motorcycle Talker", emoji: "🏍️" },
-  { key: "business_starter", label: "Business Starter", emoji: "💼" },
+  { key: "first_conversation", label: "First Conversation", icon: PartyPopper },
+  { key: "7_day_streak", label: "7 Day Streak", icon: Flame },
+  { key: "100_words_heard", label: "100 Words Heard", icon: Ear },
+  { key: "travel_ready", label: "Travel Ready", icon: Globe },
+  { key: "native_listener", label: "Native Listener", icon: Headphones },
+  { key: "motorcycle_talker", label: "Motorcycle Talker", icon: Bike },
+  { key: "business_starter", label: "Business Starter", icon: Briefcase },
 ] as const;

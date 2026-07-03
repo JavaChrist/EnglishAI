@@ -5,6 +5,13 @@ import { z } from "zod";
 import { nextEstimatedLevel } from "@/lib/ai/adaptation";
 
 const signalsSchema = z.object({
+  proficiency: z
+    .number()
+    .min(0)
+    .max(100)
+    .describe(
+      "Absolute CEFR estimate of the LEARNER's OWN English on a 0-100 scale, judged ONLY from the complexity, accuracy, and range of the messages THEY wrote (ignore how simple or hard the coach spoke). Rubric: A1≈10 (isolated words, very broken), A2≈25 (short simple sentences, frequent errors), B1≈45 (connected everyday sentences, some errors), B2≈60 (fluent on many topics, occasional errors), C1≈78 (rich, nuanced, rare errors), C2≈92 (fully native-like). BE STRICT and CONSERVATIVE: understanding easy input does NOT make someone advanced. Most learners are A2-B1. Only give 70+ if the learner clearly produces sophisticated, near-error-free English themselves.",
+    ),
   comprehension: z
     .number()
     .min(0)
@@ -72,11 +79,12 @@ export async function analyzeTurn(
       model: openai(process.env.OPENAI_MODEL ?? "gpt-4o-mini"),
       output: Output.object({ schema: signalsSchema }),
       system:
-        "You are a concise English-learning assessment engine. Assess ONLY the learner's (user) messages, not the coach's. Be calibrated and fair. Also extract a few useful vocabulary items the learner is being exposed to.",
-      prompt: `Conversation transcript:\n\n${transcript}\n\nAssess the learner's latest performance and extract i+1 vocabulary.`,
+        "You are a strict, calibrated English-proficiency assessor. Judge ONLY the learner's (user) messages, never the coach's. The coach deliberately uses simple, comprehensible input (Krashen i+1), so the learner understanding it is NOT evidence of a high level — rate their ability from the English THEY actually produce. Be conservative: most learners are A2-B1. Also extract a few useful vocabulary items the learner is being exposed to.",
+      prompt: `Conversation transcript:\n\n${transcript}\n\nEstimate the learner's true proficiency from their own writing, assess this turn, and extract i+1 vocabulary.`,
     });
 
     const level = nextEstimatedLevel(currentLevel, {
+      proficiency: output.proficiency,
       comprehension: output.comprehension,
       fluency: output.fluency,
       askedToSimplify: output.askedToSimplify,

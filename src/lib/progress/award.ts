@@ -1,3 +1,4 @@
+import { evaluateBadges } from "@/lib/progress/badges";
 import type { createClient } from "@/lib/supabase/server";
 import type { XpSource } from "@/types/database";
 import { XP_REWARDS } from "@/lib/constants";
@@ -99,7 +100,7 @@ export async function awardConversationProgress(
     .update({ progress_awarded: true })
     .eq("id", conversationId)
     .eq("progress_awarded", false)
-    .select("id")
+    .select("id, scenario")
     .maybeSingle();
 
   if (!claimed) return;
@@ -107,10 +108,7 @@ export async function awardConversationProgress(
   await touchDailyStreak(supabase, userId);
   await addXp(supabase, userId, "conversation", XP_REWARDS.conversation);
 
-  await supabase
-    .from("achievements")
-    .upsert(
-      { user_id: userId, badge_key: "first_conversation" },
-      { onConflict: "user_id,badge_key", ignoreDuplicates: true },
-    );
+  await evaluateBadges(supabase, userId, {
+    scenario: (claimed.scenario as string | null) ?? undefined,
+  });
 }

@@ -182,16 +182,19 @@ export function OnboardingWizard({ firstName }: { firstName: string }) {
 
           {current.id === "goal" && (
             <div className="grid gap-3 sm:grid-cols-2">
-              {GOALS.map((g) => (
-                <SelectCard
-                  key={g.key}
-                  selected={goal === g.key}
-                  onClick={() => setGoal(g.key)}
-                >
-                  <span className="text-2xl">{g.emoji}</span>
-                  <span className="font-medium">{g.label}</span>
-                </SelectCard>
-              ))}
+              {GOALS.map((g) => {
+                const Icon = g.icon;
+                return (
+                  <SelectCard
+                    key={g.key}
+                    selected={goal === g.key}
+                    onClick={() => setGoal(g.key)}
+                  >
+                    <Icon className="size-6 shrink-0 text-primary" />
+                    <span className="font-medium">{g.label}</span>
+                  </SelectCard>
+                );
+              })}
             </div>
           )}
 
@@ -227,6 +230,7 @@ export function OnboardingWizard({ firstName }: { firstName: string }) {
             <div className="flex flex-wrap gap-2">
               {INTERESTS.map((it) => {
                 const selected = interests.includes(it.key);
+                const Icon = it.icon;
                 return (
                   <button
                     key={it.key}
@@ -239,7 +243,7 @@ export function OnboardingWizard({ firstName }: { firstName: string }) {
                         "border-primary bg-primary text-primary-foreground",
                     )}
                   >
-                    <span>{it.emoji}</span>
+                    <Icon className="size-4" />
                     {it.label}
                   </button>
                 );
@@ -265,16 +269,19 @@ export function OnboardingWizard({ firstName }: { firstName: string }) {
 
           {current.id === "confidence" && (
             <div className="grid gap-3">
-              {CONFIDENCE_LABELS.map((c) => (
-                <SelectCard
-                  key={c.value}
-                  selected={confidence === c.value}
-                  onClick={() => setConfidence(c.value)}
-                >
-                  <span className="text-2xl">{c.emoji}</span>
-                  <span className="font-medium">{c.label}</span>
-                </SelectCard>
-              ))}
+              {CONFIDENCE_LABELS.map((c) => {
+                const Icon = c.icon;
+                return (
+                  <SelectCard
+                    key={c.value}
+                    selected={confidence === c.value}
+                    onClick={() => setConfidence(c.value)}
+                  >
+                    <Icon className="size-6 shrink-0 text-primary" />
+                    <span className="font-medium">{c.label}</span>
+                  </SelectCard>
+                );
+              })}
             </div>
           )}
         </div>

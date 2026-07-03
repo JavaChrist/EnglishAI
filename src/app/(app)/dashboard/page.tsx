@@ -1,4 +1,5 @@
 import {
+  ChevronRight,
   Flame,
   Gauge,
   GraduationCap,
@@ -133,9 +134,7 @@ export default async function DashboardPage() {
 
       <main className="mx-auto w-full max-w-5xl flex-1 space-y-6 px-4 py-8">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Hi, {firstName} 👋
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight">Hi, {firstName}</h1>
           <p className="text-muted-foreground">
             {goalLabel
               ? `Let's get you closer to: ${goalLabel.toLowerCase()}.`
@@ -161,7 +160,7 @@ export default async function DashboardPage() {
                 <Progress value={goalProgress} />
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   {doneToday >= dailyTarget
-                    ? "Goal reached today — nice work! 🎉"
+                    ? "Goal reached today — nice work!"
                     : `${doneToday} / ${dailyTarget} session${
                         dailyTarget > 1 ? "s" : ""
                       } today`}
@@ -238,30 +237,36 @@ export default async function DashboardPage() {
         </div>
 
         {/* Last badge */}
-        <Card>
-          <CardHeader className="flex-row items-center gap-4">
-            <div className="flex size-12 items-center justify-center rounded-xl bg-accent text-2xl text-primary">
-              {badge ? <span>{badge.emoji}</span> : <Trophy className="size-6" />}
-            </div>
-            <div>
-              {badge ? (
-                <>
-                  <CardTitle>Latest badge: {badge.label}</CardTitle>
-                  <CardDescription>
-                    Keep practicing to unlock more.
-                  </CardDescription>
-                </>
-              ) : (
-                <>
-                  <CardTitle>Your first badge is waiting</CardTitle>
-                  <CardDescription>
-                    Finish your first conversation to unlock it.
-                  </CardDescription>
-                </>
-              )}
-            </div>
-          </CardHeader>
-        </Card>
+        <Link href="/badges" className="group block">
+          <Card className="transition-all group-hover:border-primary/60 group-hover:ring-primary/30">
+            <CardHeader className="flex-row items-center gap-4">
+              <div className="flex size-12 items-center justify-center rounded-xl bg-accent text-primary">
+                {(() => {
+                  const BadgeIcon = badge?.icon ?? Trophy;
+                  return <BadgeIcon className="size-6" />;
+                })()}
+              </div>
+              <div className="flex-1">
+                {badge ? (
+                  <>
+                    <CardTitle>Latest badge: {badge.label}</CardTitle>
+                    <CardDescription>
+                      View all your badges and what&apos;s next.
+                    </CardDescription>
+                  </>
+                ) : (
+                  <>
+                    <CardTitle>Your first badge is waiting</CardTitle>
+                    <CardDescription>
+                      Finish your first conversation to unlock it.
+                    </CardDescription>
+                  </>
+                )}
+              </div>
+              <ChevronRight className="size-5 text-muted-foreground" />
+            </CardHeader>
+          </Card>
+        </Link>
       </main>
     </div>
   );

@@ -1,0 +1,31 @@
+---
+description: No emojis in the UI or code — always use Lucide icons instead
+alwaysApply: true
+---
+
+# No emojis — use Lucide icons
+
+The user dislikes emojis. Never use emoji characters in UI text, JSX, labels,
+placeholders, headings, or code. Always use [Lucide](https://lucide.dev) icons
+(`lucide-react`) instead.
+
+```tsx
+// BAD — emoji in the UI
+<span>🎧 Nice listening!</span>
+<span>{voice === "female" ? "👩 Mei" : "👨 Tom"}</span>
+
+// GOOD — Lucide icon
+import { Headphones, UserRound } from "lucide-react";
+
+<span className="flex items-center gap-1">
+  <Headphones className="size-4" /> Nice listening!
+</span>
+<span className="flex items-center gap-1">
+  <UserRound className="size-3.5 text-primary" /> Mei
+</span>
+```
+
+- Differentiate items with icon color (e.g. `text-primary`, `text-emerald-500`)
+  rather than different emoji.
+- This also applies to console output, commit messages, and docs unless the
+  user explicitly asks for emojis.

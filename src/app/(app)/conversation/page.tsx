@@ -28,21 +28,28 @@ export default function ConversationPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {SCENARIOS.map((scenario) => (
-            <Link
-              key={scenario.key}
-              href={`/conversation/${scenario.key}`}
-              className="group"
-            >
-              <Card className="h-full transition-all group-hover:border-primary/60 group-hover:ring-primary/30">
-                <CardHeader>
-                  <div className="mb-1 text-3xl">{scenario.emoji}</div>
-                  <CardTitle>{scenario.label}</CardTitle>
-                  <CardDescription>Practice a {scenario.label.toLowerCase()} conversation.</CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
+          {SCENARIOS.map((scenario) => {
+            const Icon = scenario.icon;
+            return (
+              <Link
+                key={scenario.key}
+                href={`/conversation/${scenario.key}`}
+                className="group"
+              >
+                <Card className="h-full transition-all group-hover:border-primary/60 group-hover:ring-primary/30">
+                  <CardHeader>
+                    <div className="mb-2 flex size-11 items-center justify-center rounded-xl bg-accent text-primary">
+                      <Icon className="size-6" />
+                    </div>
+                    <CardTitle>{scenario.label}</CardTitle>
+                    <CardDescription>
+                      Practice a {scenario.label.toLowerCase()} conversation.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       </main>
     </div>

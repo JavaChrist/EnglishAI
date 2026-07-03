@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, Volume2, X } from "lucide-react";
+import { Check, Loader2, PartyPopper, Volume2, X } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
@@ -126,7 +126,9 @@ export function ReviewSession({
     const xp = correctCount * XP_REWARDS.review;
     return (
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-16 text-center">
-        <div className="text-6xl">🎉</div>
+        <span className="flex size-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <PartyPopper className="size-8" />
+        </span>
         <div className="space-y-2">
           <h1 className="text-2xl font-bold tracking-tight">Review complete!</h1>
           <p className="text-muted-foreground">

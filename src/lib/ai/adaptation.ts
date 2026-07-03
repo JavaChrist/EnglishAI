@@ -54,6 +54,11 @@ export function levelToCEFR(level: number): CEFRLevel {
 }
 
 export type PerformanceSignals = {
+  /**
+   * Absolute estimate (0–100) of the learner's demonstrated proficiency, judged
+   * from the English they actually produce. This is the primary anchor.
+   */
+  proficiency?: number;
   /** 0–1: how well the learner understood the input. */
   comprehension: number;
   /** 0–1: how fluently they produced language (optional). */
@@ -66,33 +71,47 @@ export type PerformanceSignals = {
 
 /**
  * Compute the next continuous level after an interaction.
- * Nudges up when the learner is comfortably succeeding, down when struggling,
- * always in small steps (±5 max) to stay near i+1.
+ *
+ * The estimate is anchored to the learner's *demonstrated production ability*
+ * (a slow exponential moving average toward `proficiency`) so it can't run away
+ * from reality: understanding deliberately-simplified i+1 input never inflates
+ * the level. A small comprehension-based nudge keeps difficulty ~"+1" above the
+ * learner's comfort zone. Upward moves are capped tightly; downward corrections
+ * are allowed to be faster so a bad over-estimate snaps back quickly.
  */
 export function nextEstimatedLevel(
   current: number,
   signals: PerformanceSignals,
 ): number {
   const comprehension = clamp(signals.comprehension, 0, 1);
-  let delta = 0;
 
-  if (signals.askedToSimplify) delta -= 3;
-
-  if (comprehension >= 0.85) delta += 3;
-  else if (comprehension >= TARGET_COMPREHENSION.min) delta += 1;
-  else if (comprehension >= 0.55) delta += 0;
-  else if (comprehension >= 0.4) delta -= 2;
-  else delta -= 4;
+  // Small i+1 nudge based on how the learner coped with the current difficulty.
+  let nudge = 0;
+  if (signals.askedToSimplify) nudge -= 2;
+  if (comprehension >= 0.85) nudge += 1.5;
+  else if (comprehension >= TARGET_COMPREHENSION.min) nudge += 0.5;
+  else if (comprehension >= 0.5) nudge += 0;
+  else if (comprehension >= 0.35) nudge -= 1.5;
+  else nudge -= 3;
 
   if (signals.fluency !== undefined) {
-    delta += (clamp(signals.fluency, 0, 1) - 0.5) * 2;
-  }
-  if (signals.responseTime !== undefined) {
-    delta += clamp(signals.responseTime, 0, 1) - 0.5;
+    nudge += (clamp(signals.fluency, 0, 1) - 0.5) * 1.5;
   }
 
-  delta = clamp(delta, -5, 5);
-  return clampLevel(current + delta);
+  let next: number;
+  if (signals.proficiency !== undefined) {
+    const target = clampLevel(signals.proficiency);
+    // Gentle pull toward demonstrated ability; equilibrium sits slightly above
+    // it (the "+1"), never far below.
+    const alpha = 0.3;
+    next = current + (target - current) * alpha + nudge;
+  } else {
+    next = current + nudge;
+  }
+
+  // Asymmetric clamp: rise slowly (+4 max), correct downward faster (−12 max).
+  next = clamp(next, current - 12, current + 4);
+  return clampLevel(next);
 }
 
 /**

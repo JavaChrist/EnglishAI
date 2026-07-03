@@ -52,10 +52,10 @@ Begin and stay in the scenario. Make ${firstName} feel confident and keep the co
 
 export function scenarioOpener(scenarioKey: string, firstName: string): string {
   const openers: Partial<Record<ScenarioKey, string>> = {
-    coffee_shop: `Hi ${firstName}! Welcome to Bean & Brew ☕ What can I get started for you today?`,
+    coffee_shop: `Hi ${firstName}! Welcome to Bean & Brew. What can I get started for you today?`,
     airport: `Good morning ${firstName}! May I see your passport and boarding pass, please? Where are you flying today?`,
     hotel: `Welcome to the Grand Hotel, ${firstName}! Do you have a reservation with us?`,
-    motorcycles: `Hey ${firstName}! Nice to see a fellow rider 🏍️ So, what kind of bike are you into?`,
+    motorcycles: `Hey ${firstName}! Nice to see a fellow rider. So, what kind of bike are you into?`,
     restaurant: `Good evening ${firstName}, welcome! A table for how many tonight?`,
     shopping: `Hi ${firstName}! Are you looking for anything in particular today?`,
     business: `Hi ${firstName}, thanks for joining the meeting. Shall we get started?`,
