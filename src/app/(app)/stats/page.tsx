@@ -52,6 +52,12 @@ export default async function StatsPage() {
     .eq("user_id", user.id)
     .gte("created_at", since.toISOString());
 
+  const { data: inputEvents } = await supabase
+    .from("input_events")
+    .select("seconds, created_at")
+    .eq("user_id", user.id)
+    .gte("created_at", since.toISOString());
+
   const { data: vocab } = await supabase
     .from("vocabulary_items")
     .select("status")
@@ -64,23 +70,28 @@ export default async function StatsPage() {
   const cefr = levelToCEFR(Number(lang?.estimated_level ?? 25));
   const acquisitionIndex = Math.round(Number(profile?.acquisition_index ?? 0));
 
-  // Daily XP for the last DAYS days.
+  // Daily comprehensible input (minutes) for the last DAYS days.
   const events = xpEvents ?? [];
-  const perDay = new Map<string, number>();
+  const inputs = inputEvents ?? [];
+  const perDaySeconds = new Map<string, number>();
   for (let i = 0; i < DAYS; i += 1) {
     const d = new Date(since);
     d.setUTCDate(since.getUTCDate() + i);
-    perDay.set(dayKey(d), 0);
+    perDaySeconds.set(dayKey(d), 0);
   }
-  events.forEach((e) => {
+  inputs.forEach((e) => {
     const key = dayKey(new Date(e.created_at as string));
-    if (perDay.has(key)) {
-      perDay.set(key, (perDay.get(key) ?? 0) + Number(e.amount ?? 0));
+    if (perDaySeconds.has(key)) {
+      perDaySeconds.set(key, (perDaySeconds.get(key) ?? 0) + Number(e.seconds ?? 0));
     }
   });
-  const daily = [...perDay.entries()].map(([key, value]) => ({ key, value }));
-  const maxDaily = Math.max(1, ...daily.map((d) => d.value));
-  const activeDays = daily.filter((d) => d.value > 0).length;
+  const daily = [...perDaySeconds.entries()].map(([key, seconds]) => ({
+    key,
+    minutes: Math.round(seconds / 60),
+    seconds,
+  }));
+  const maxDaily = Math.max(1, ...daily.map((d) => d.seconds));
+  const activeDays = daily.filter((d) => d.seconds > 0).length;
 
   // XP by source.
   const bySource = new Map<string, number>();
@@ -145,10 +156,12 @@ export default async function StatsPage() {
           />
         </div>
 
-        {/* Daily activity */}
+        {/* Daily comprehensible input */}
         <section className="rounded-2xl border border-border/60 bg-card p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold">Activity — last {DAYS} days</h2>
+            <h2 className="font-semibold">
+              Comprehensible input — last {DAYS} days
+            </h2>
             <span className="text-sm text-muted-foreground">
               {activeDays} active day{activeDays === 1 ? "" : "s"}
             </span>
@@ -158,15 +171,15 @@ export default async function StatsPage() {
               <div
                 key={d.key}
                 className="flex flex-1 flex-col items-center justify-end gap-1"
-                title={`${d.value} XP`}
+                title={`${d.minutes} min`}
               >
                 <div
                   className={cn(
                     "w-full rounded-t transition-all",
-                    d.value > 0 ? "bg-primary" : "bg-muted",
+                    d.seconds > 0 ? "bg-primary" : "bg-muted",
                   )}
                   style={{
-                    height: `${Math.max(4, (d.value / maxDaily) * 100)}%`,
+                    height: `${Math.max(4, (d.seconds / maxDaily) * 100)}%`,
                   }}
                 />
                 <span className="text-[10px] text-muted-foreground">
@@ -175,6 +188,9 @@ export default async function StatsPage() {
               </div>
             ))}
           </div>
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            Minutes of input per day — the more, the faster you acquire.
+          </p>
         </section>
 
         <div className="grid gap-6 lg:grid-cols-2">

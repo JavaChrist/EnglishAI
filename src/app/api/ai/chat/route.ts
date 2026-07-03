@@ -112,7 +112,7 @@ export async function POST(req: Request) {
               .split(/\s+/)
               .filter(Boolean).length;
             try {
-              await addInputSeconds(supabase, user.id, words / 2.5);
+              await addInputSeconds(supabase, user.id, words / 2.5, "conversation");
             } catch (error) {
               console.error("[chat] input tracking failed", error);
             }

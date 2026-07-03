@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
     await addXp(supabase, user.id, "listening", XP_REWARDS.listening);
     const secs = [30, 60, 120].includes(Number(duration)) ? Number(duration) : 60;
-    await addInputSeconds(supabase, user.id, secs);
+    await addInputSeconds(supabase, user.id, secs, "listening");
     await touchDailyStreak(supabase, user.id);
     await evaluateBadges(supabase, user.id, { listened: true });
 

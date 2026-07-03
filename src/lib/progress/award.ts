@@ -44,9 +44,17 @@ export async function addInputSeconds(
   supabase: SupabaseServerClient,
   userId: string,
   seconds: number,
+  source: XpSource,
 ): Promise<void> {
   const s = Math.round(seconds);
   if (s <= 0) return;
+
+  // Per-activity log (powers the daily input curve).
+  await supabase
+    .from("input_events")
+    .insert({ user_id: userId, source, seconds: s });
+
+  // Fast cumulative total on the profile.
   const { data } = await supabase
     .from("users_profile")
     .select("input_seconds")

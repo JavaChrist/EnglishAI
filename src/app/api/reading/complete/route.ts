@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
     await addXp(supabase, user.id, "reading", XP_REWARDS.reading);
     // Silent reading averages ~3 words/second.
-    await addInputSeconds(supabase, user.id, Number(words ?? 0) / 3);
+    await addInputSeconds(supabase, user.id, Number(words ?? 0) / 3, "reading");
     await touchDailyStreak(supabase, user.id);
     await evaluateBadges(supabase, user.id);
 
