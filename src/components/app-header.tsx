@@ -1,3 +1,4 @@
+import { BarChart3, Trophy } from "lucide-react";
 import Link from "next/link";
 
 import { signOut } from "@/app/auth/actions";
@@ -15,7 +16,23 @@ export function AppHeader() {
             English<span className="text-primary">AI</span>
           </span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Progress"
+            render={<Link href="/stats" />}
+          >
+            <BarChart3 className="size-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Badges"
+            render={<Link href="/badges" />}
+          >
+            <Trophy className="size-5" />
+          </Button>
           <ThemeToggle />
           <form action={signOut}>
             <Button type="submit" variant="outline" size="sm">
