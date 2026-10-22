@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { UpdateBanner } from "@/components/system/UpdateBanner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -65,6 +66,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <UpdateBanner
+            initialVersion={process.env.VERCEL_GIT_COMMIT_SHA ?? "dev"}
+          />
           {children}
           <Toaster richColors position="top-center" />
         </ThemeProvider>

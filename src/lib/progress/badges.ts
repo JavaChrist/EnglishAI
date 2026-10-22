@@ -71,6 +71,7 @@ export async function evaluateBadges(
     listening: sourceCounts.listening ?? 0,
     reading: sourceCounts.reading ?? 0,
     speaking: sourceCounts.speaking ?? 0,
+    pronunciation: sourceCounts.pronunciation ?? 0,
     reviews: sourceCounts.review ?? 0,
     streak: streakLongest,
     words: vocab.length,

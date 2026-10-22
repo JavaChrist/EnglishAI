@@ -13,6 +13,7 @@ import {
   Gamepad2,
   Globe,
   GraduationCap,
+  AudioLines,
   Headphones,
   Hotel,
   Laptop,
@@ -80,6 +81,7 @@ export const XP_REWARDS = {
   conversation: 20,
   listening: 15,
   speaking: 15,
+  pronunciation: 10,
   memory: 10,
   review: 10,
   reading: 15,
@@ -208,6 +210,7 @@ export type BadgeMetric =
   | "listening"
   | "reading"
   | "speaking"
+  | "pronunciation"
   | "reviews"
   | "streak"
   | "words"
@@ -258,6 +261,12 @@ export const BADGES: BadgeDef[] = [
   { key: "speak_25", label: "Confident Speaker", description: "Answer 25 speaking prompts.", icon: Mic, tier: "gold", metric: "speaking", threshold: 25, group: "Speaking" },
   { key: "speak_50", label: "Orator", description: "Answer 50 speaking prompts.", icon: Mic, tier: "platinum", metric: "speaking", threshold: 50, group: "Speaking" },
 
+  // Pronunciation
+  { key: "pron_1", label: "First Sound", description: "Finish a pronunciation drill.", icon: AudioLines, tier: "bronze", metric: "pronunciation", threshold: 1, group: "Pronunciation" },
+  { key: "pron_10", label: "Clear Voice", description: "Finish 10 pronunciation drills.", icon: AudioLines, tier: "silver", metric: "pronunciation", threshold: 10, group: "Pronunciation" },
+  { key: "pron_25", label: "Sound Shaper", description: "Finish 25 pronunciation drills.", icon: AudioLines, tier: "gold", metric: "pronunciation", threshold: 25, group: "Pronunciation" },
+  { key: "pron_50", label: "Easy on the Ear", description: "Finish 50 pronunciation drills.", icon: AudioLines, tier: "platinum", metric: "pronunciation", threshold: 50, group: "Pronunciation" },
+
   // Reviews
   { key: "review_10", label: "Memory Starter", description: "Review 10 words.", icon: Repeat, tier: "bronze", metric: "reviews", threshold: 10, group: "Reviews" },
   { key: "review_50", label: "Memory Keeper", description: "Review 50 words.", icon: Repeat, tier: "silver", metric: "reviews", threshold: 50, group: "Reviews" },
@@ -307,6 +316,7 @@ export const BADGE_GROUPS = [
   "Conversations",
   "Listening",
   "Speaking",
+  "Pronunciation",
   "Reading",
   "Vocabulary",
   "Reviews",

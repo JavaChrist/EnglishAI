@@ -1,0 +1,16 @@
+---
+description: Vérifier et ajouter la modale de mise à jour après un déploiement
+alwaysApply: true
+---
+
+# Modale de mise à jour
+
+Sur chaque app web (Next.js ou équivalent), vérifier que la modale de validation de mise à jour est intégrée. Si elle manque, l'ajouter sur le modèle de CraftNoteBox / EnglishAI.
+
+La page embarque `process.env.VERCEL_GIT_COMMIT_SHA ?? "dev"`. Un composant client interroge `GET /api/version` (réponse `{ version }`, `Cache-Control: no-store`, `dynamic = "force-dynamic"`). Si les SHA diffèrent et ne valent pas `"dev"`, afficher une modale (portail sur `document.body`, pas d'`alert`) : « Nouvelle version disponible », bouton « Mettre à jour » qui fait `location.reload()`.
+
+- Contrôle au chargement, toutes les 60 s, et au retour sur l'onglet (`visibilitychange`, `focus`, `pageshow`).
+- En `"dev"`, ne rien afficher.
+- App installée (standalone) : un seul rechargement automatique, puis la modale si la page reste ancienne. Clé `sessionStorage` propre à l'app.
+- Monter le composant dans le layout racine.
+- Si un middleware d'auth protège les routes, laisser `/api/version` publique.

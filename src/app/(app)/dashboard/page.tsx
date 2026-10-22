@@ -1,4 +1,5 @@
 import {
+  AudioLines,
   BookOpen,
   ChevronRight,
   Flame,
@@ -133,6 +134,12 @@ export default async function DashboardPage() {
       description: "Practice speaking and get feedback.",
     },
     {
+      href: "/pronunciation",
+      icon: AudioLines,
+      title: "Pronunciation",
+      description: "Repeat a sentence and shape the sounds.",
+    },
+    {
       href: "/reading",
       icon: BookOpen,
       title: "Reading Room",
@@ -249,7 +256,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Actions */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {actions.map(({ href, icon: Icon, title, description }) => (
             <Link key={href} href={href} className="group">
               <Card className="h-full transition-all group-hover:border-primary/60 group-hover:ring-primary/30">

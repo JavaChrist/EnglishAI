@@ -18,7 +18,8 @@ export type XpSource =
   | "speaking"
   | "memory"
   | "review"
-  | "reading";
+  | "reading"
+  | "pronunciation";
 
 export interface UsersProfile {
   id: string;
