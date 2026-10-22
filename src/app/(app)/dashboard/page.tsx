@@ -137,7 +137,7 @@ export default async function DashboardPage() {
       href: "/pronunciation",
       icon: AudioLines,
       title: "Pronunciation",
-      description: "Repeat a sentence and shape the sounds.",
+      description: "Repeat a sentence. The coach corrects you out loud.",
     },
     {
       href: "/reading",

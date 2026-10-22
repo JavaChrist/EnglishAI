@@ -90,6 +90,8 @@ export type PronunciationFeedback = {
   heard: string;
   encouragement: string;
   tip: string;
+  /** Script read aloud by the coach voice. */
+  spoken: string;
   words: WordFeedback[];
 };
 
@@ -165,6 +167,39 @@ function mergeWords(
   });
 }
 
+/**
+ * What the coach says out loud. The voice models each tricky word, then the
+ * full sentence, so the learner hears the correction and not only reads it.
+ */
+function spokenCorrection(
+  sentence: string,
+  feedback: Omit<PronunciationFeedback, "spoken">,
+): string {
+  const checks = feedback.words.filter((word) => word.status === "check").slice(0, 3);
+  if (feedback.score < 20) {
+    return `I didn't catch that. Come a little closer to the microphone. Listen, and repeat after me. ${sentence}`;
+  }
+  if (checks.length === 0) {
+    return `${feedback.encouragement} Here it is once more. Copy my voice. ${sentence}`;
+  }
+  const modeled = checks
+    .map((word) => {
+      const hint = word.note?.replace(/[.]+$/g, "").trim();
+      const lead = hint ? `${hint}. ` : "";
+      return `${lead}Listen. ${word.word}... ${word.word}.`;
+    })
+    .join(" ");
+  const script = `${feedback.encouragement} ${modeled} Now say the whole sentence with me. ${sentence}`;
+  return script.length > 700 ? script.slice(0, 700).replace(/\s+\S*$/, "") : script;
+}
+
+function withSpoken(
+  sentence: string,
+  feedback: Omit<PronunciationFeedback, "spoken">,
+): PronunciationFeedback {
+  return { ...feedback, spoken: spokenCorrection(sentence, feedback) };
+}
+
 function shapeFeedback(
   sentence: string,
   raw: z.infer<typeof feedbackSchema>,
@@ -175,17 +210,17 @@ function shapeFeedback(
   const adjusted =
     words.length > 0 && checks === 0 ? Math.max(score, 85) : score;
 
-  return {
+  return withSpoken(sentence, {
     score: adjusted,
     heard: soften(raw.heard) || sentence,
     encouragement:
       soften(raw.encouragement) ||
-      (adjusted >= 80 ? "That sounded clear." : "Good try — let's shape one sound."),
+      (adjusted >= 80 ? "That sounded clear." : "Good try. Let's shape one sound."),
     tip:
       soften(raw.tip) ||
       "Listen to the model slowly, then copy the rhythm.",
     words,
-  };
+  });
 }
 
 function extractJson(text: string): unknown {
@@ -226,7 +261,7 @@ Return JSON only:
   "heard": "what you actually heard, in a short phrase",
   "encouragement": "one warm specific compliment, max 14 words",
   "tip": "one concrete tip about the mouth, breath, or stress, max 24 words",
-  "words": [{ "word": "each target word in order", "status": "clear" or "check", "note": "only when status is check, max 10 words about that sound" }]
+  "words": [{ "word": "each target word in order", "status": "clear" or "check",   "note": "only when status is check, max 10 words of plain spoken English about the mouth or the sound. No phonetic symbols." }]
 }
 Mark "check" only when that word was missing, unclear, or a different sound. If the sentence was clear, score 85-100. If you hear almost no speech, score under 25 and say so kindly in the tip.`;
 
@@ -440,13 +475,13 @@ async function polishFromTranscript(
       ? 0
       : clampScore((100 * (words.length - checks.length)) / words.length);
 
-  const base: PronunciationFeedback = {
+  const base = {
     score: checks.length === 0 ? Math.max(score, 88) : score,
     heard: heard || "I couldn't catch the words.",
     encouragement:
       checks.length === 0
         ? "Clear from start to finish."
-        : "Good try — a few sounds need another pass.",
+        : "Good try. A few sounds need another pass.",
     tip:
       checks.length === 0
         ? phrase.guide
@@ -455,12 +490,12 @@ async function polishFromTranscript(
   };
 
   if (!heard) {
-    return {
+    return withSpoken(phrase.sentence, {
       ...base,
       score: 0,
       encouragement: "I didn't catch that.",
       tip: "Move a little closer to the mic and try the sentence again.",
-    };
+    });
   }
 
   try {
@@ -468,7 +503,7 @@ async function polishFromTranscript(
       model: textModel(),
       output: Output.object({ schema: noteSchema }),
       system:
-        "You are a warm English pronunciation coach. You only see a transcript of a repeat-after-me attempt, so judge word sounds from what was heard versus the target. Never say wrong, incorrect, or mistake. Notes are short and about the mouth or the missing sound.",
+        "You are a warm English pronunciation coach. You only see a transcript of a repeat-after-me attempt, so judge word sounds from what was heard versus the target. Never say wrong, incorrect, or mistake. Notes are short, speakable English about the mouth or the missing sound. No phonetic symbols.",
       prompt: `Target: ${phrase.sentence}
 Focus: ${phrase.focus}
 Guide: ${phrase.guide}
@@ -481,7 +516,7 @@ Write one encouragement, one tip, and a note only for each word to polish.`,
       output.notes.map((item) => [normalizeWord(item.word), soften(item.note)]),
     );
 
-    return {
+    return withSpoken(phrase.sentence, {
       ...base,
       encouragement: soften(output.encouragement) || base.encouragement,
       tip: soften(output.tip) || base.tip,
@@ -493,10 +528,10 @@ Write one encouragement, one tip, and a note only for each word to polish.`,
             }
           : word,
       ),
-    };
+    });
   } catch (error) {
     console.error("[pronunciation] text polish failed", error);
-    return base;
+    return withSpoken(phrase.sentence, base);
   }
 }
 

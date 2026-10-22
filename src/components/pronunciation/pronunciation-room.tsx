@@ -41,6 +41,7 @@ type Feedback = {
   heard: string;
   encouragement: string;
   tip: string;
+  spoken: string;
   words: WordFeedback[];
 };
 
@@ -129,13 +130,17 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
         const data = (await res.json()) as Feedback;
         setFeedback(data);
         setPhase("feedback");
+        const coachLine =
+          data.spoken?.trim() ||
+          `${data.tip} ${phrase.sentence}`.trim();
+        void speak("coach", coachLine);
       } catch (err) {
         console.error("[pronunciation] assess failed", err);
         setError("Couldn't assess that recording. Please try again.");
         setPhase("idle");
       }
     },
-    [phrase],
+    [phrase, speak],
   );
 
   const handleRecorded = React.useCallback(
@@ -192,7 +197,7 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Pronunciation</h1>
           <p className="text-xs text-muted-foreground">
-            Listen, then repeat. The coach shapes the sounds.
+            Repeat the sentence. The coach says the correction out loud.
           </p>
         </div>
       </div>
@@ -306,7 +311,7 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
             {recorder.recording
               ? "Listening… tap to finish."
               : phase === "assessing"
-                ? "Comparing your sounds to the model…"
+                ? "Your coach is preparing the correction…"
                 : "Hear the sentence, then tap the mic and repeat it."}
           </p>
         </section>
@@ -322,6 +327,34 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
 
       {phase === "feedback" && feedback && phrase && (
         <section className="space-y-4">
+          <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="flex items-center gap-2 text-sm font-medium text-primary">
+                <AudioLines className="size-4" /> Coach
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 px-2 text-xs text-muted-foreground"
+                onClick={() =>
+                  speakingId === "coach"
+                    ? stopTts()
+                    : void speak("coach", feedback.spoken || phrase.sentence)
+                }
+              >
+                {loadingId === "coach" ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : speakingId === "coach" ? (
+                  <Square className="size-3.5 fill-current" />
+                ) : (
+                  <Volume2 className="size-3.5" />
+                )}
+                {speakingId === "coach" ? "Stop" : "Hear again"}
+              </Button>
+            </div>
+            <p className="text-sm leading-relaxed">{feedback.spoken}</p>
+          </div>
+
           <div className="flex flex-col items-center gap-2">
             <ProgressRing value={feedback.score} size={112} strokeWidth={10}>
               <span className="text-2xl font-bold leading-none">
