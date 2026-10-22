@@ -14,7 +14,7 @@ import {
 import Link from "next/link";
 import * as React from "react";
 
-import { useRecorder } from "@/components/conversation/use-recorder";
+import { useOpenMic } from "@/components/pronunciation/use-open-mic";
 import { useTts } from "@/components/conversation/use-tts";
 import { Button } from "@/components/ui/button";
 import { ProgressRing } from "@/components/ui/progress-ring";
@@ -63,7 +63,6 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
   const [feedback, setFeedback] = React.useState<Feedback | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  const recordStartRef = React.useRef<number | null>(null);
   const recentRef = React.useRef<string[]>([]);
   const requestRef = React.useRef(0);
 
@@ -152,28 +151,19 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
   );
 
   const handleRecorded = React.useCallback(
-    (blob: Blob) => {
-      const spokenSeconds = recordStartRef.current
-        ? Math.round((Date.now() - recordStartRef.current) / 1000)
-        : 0;
-      recordStartRef.current = null;
+    (blob: Blob, spokenSeconds: number) => {
       void assess(blob, spokenSeconds);
     },
     [assess],
   );
 
-  const recorder = useRecorder({ onRecorded: handleRecorded });
-
-  function toggleMic() {
-    if (recorder.recording) {
-      recorder.stop();
-    } else {
-      stopTts();
-      setError(null);
-      recordStartRef.current = Date.now();
-      void recorder.start();
-    }
-  }
+  const micReady =
+    !loadingPhrase &&
+    !!phrase &&
+    phase !== "assessing" &&
+    speakingId == null &&
+    loadingId == null;
+  const mic = useOpenMic({ enabled: micReady, onUtterance: handleRecorded });
 
   function chooseFocus(next: string | null) {
     if (next === focusId && phase !== "feedback") return;
@@ -181,7 +171,6 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
     void loadPhrase(next);
   }
 
-  const busy = loadingPhrase || phase === "assessing";
   const checks = feedback?.words.filter((word) => word.status === "check") ?? [];
 
   return (
@@ -198,7 +187,7 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Pronunciation</h1>
           <p className="text-xs text-muted-foreground">
-            Repeat the sentence. The coach says the correction out loud.
+            The microphone stays on. Repeat after the coach.
           </p>
         </div>
       </div>
@@ -290,41 +279,51 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
         )}
       </section>
 
-      {recorder.supported && (
+      {mic.supported && (
         <section className="flex flex-col items-center gap-3 text-center">
-          <Button
-            type="button"
-            size="icon"
-            variant={recorder.recording ? "default" : "outline"}
-            className={cn(
-              "size-20 rounded-full",
-              recorder.recording && "animate-pulse",
-            )}
-            onClick={toggleMic}
-            disabled={busy || speakingId === "coach" || speakingId === "echo" || loadingId === "echo"}
-            aria-label={recorder.recording ? "Stop and send" : "Record the sentence"}
-          >
-            {phase === "assessing" ? (
-              <Loader2 className="size-8 animate-spin" />
-            ) : recorder.recording ? (
-              <Square className="size-8 fill-current" />
-            ) : (
+          {mic.needsTap && !mic.live ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="size-20 rounded-full"
+              onClick={() => void mic.arm()}
+              aria-label="Turn the microphone on"
+            >
               <Mic className="size-8" />
-            )}
-          </Button>
+            </Button>
+          ) : (
+            <div
+              className={cn(
+                "flex size-20 items-center justify-center rounded-full border",
+                mic.hearing
+                  ? "animate-pulse border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card text-primary",
+              )}
+              aria-label={mic.live ? "Microphone is on" : "Opening the microphone"}
+            >
+              {phase === "assessing" || !mic.live ? (
+                <Loader2 className="size-8 animate-spin" />
+              ) : (
+                <Mic className="size-8" />
+              )}
+            </div>
+          )}
           <p className="text-sm text-muted-foreground">
-            {recorder.recording
-              ? "Listening… tap to finish."
+            {mic.needsTap && !mic.live
+              ? "Allow the microphone once. It stays on after that."
               : phase === "assessing"
                 ? "Your coach is preparing the correction…"
-                : phase === "feedback"
-                  ? "Repeat after me. Copy the same words, then tap the mic."
-                  : "Hear it, then tap the mic and repeat after me."}
+                : speakingId || loadingId
+                  ? "The coach is speaking. The microphone stays on."
+                  : mic.hearing
+                    ? "Hearing you…"
+                    : "Microphone on. Speak when you are ready."}
           </p>
         </section>
       )}
 
-      {phase !== "feedback" && !recorder.supported && !loadingPhrase && (
+      {!mic.supported && !loadingPhrase && (
         <p className="text-center text-sm text-muted-foreground">
           This browser cannot use the microphone. Try Chrome or Safari.
         </p>
