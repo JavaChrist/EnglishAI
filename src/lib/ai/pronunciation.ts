@@ -168,8 +168,8 @@ function mergeWords(
 }
 
 /**
- * What the coach says out loud. The voice models each tricky word, then the
- * full sentence, so the learner hears the correction and not only reads it.
+ * Spoken correction, then an exact "Repeat after me" model. The model uses
+ * only the target words, so the learner copies them instead of inventing new ones.
  */
 function spokenCorrection(
   sentence: string,
@@ -177,19 +177,24 @@ function spokenCorrection(
 ): string {
   const checks = feedback.words.filter((word) => word.status === "check").slice(0, 3);
   if (feedback.score < 20) {
-    return `I didn't catch that. Come a little closer to the microphone. Listen, and repeat after me. ${sentence}`;
+    return `I didn't catch that. Come a little closer. Repeat after me. ${sentence}`;
   }
-  if (checks.length === 0) {
-    return `${feedback.encouragement} Here it is once more. Copy my voice. ${sentence}`;
-  }
-  const modeled = checks
-    .map((word) => {
-      const hint = word.note?.replace(/[.]+$/g, "").trim();
-      const lead = hint ? `${hint}. ` : "";
-      return `${lead}Listen. ${word.word}... ${word.word}.`;
-    })
-    .join(" ");
-  const script = `${feedback.encouragement} ${modeled} Now say the whole sentence with me. ${sentence}`;
+  const model =
+    checks.length === 0
+      ? `Repeat after me. ${sentence}`
+      : `Repeat after me. ${checks
+          .map((word) => `${word.word}... ${word.word}.`)
+          .join(" ")} Now the whole sentence. Repeat after me. ${sentence}`;
+  const hints =
+    checks.length === 0
+      ? feedback.encouragement
+      : checks
+          .map((word) => {
+            const hint = word.note?.replace(/[.]+$/g, "").trim();
+            return hint ? `${word.word}. ${hint}.` : word.word;
+          })
+          .join(" ");
+  const script = `${hints} Don't add any words. ${model}`;
   return script.length > 700 ? script.slice(0, 700).replace(/\s+\S*$/, "") : script;
 }
 

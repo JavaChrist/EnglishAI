@@ -47,6 +47,14 @@ type Feedback = {
 
 type Phase = "idle" | "assessing" | "feedback";
 
+/** Exact model the learner must copy, so a retry doesn't invent new words. */
+function echoScript(sentence: string, words: WordFeedback[]): string {
+  const checks = words.filter((word) => word.status === "check").slice(0, 3);
+  if (checks.length === 0) return `Repeat after me. ${sentence}`;
+  const modeled = checks.map((word) => `${word.word}... ${word.word}.`).join(" ");
+  return `Repeat after me. ${modeled} Now the whole sentence. Repeat after me. ${sentence}`;
+}
+
 export function PronunciationRoom({ voice }: { voice: Voice }) {
   const [focusId, setFocusId] = React.useState<string | null>(null);
   const [phrase, setPhrase] = React.useState<Phrase | null>(null);
@@ -132,7 +140,7 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
         setPhase("feedback");
         const coachLine =
           data.spoken?.trim() ||
-          `${data.tip} ${phrase.sentence}`.trim();
+          `Repeat after me. ${phrase.sentence}`;
         void speak("coach", coachLine);
       } catch (err) {
         console.error("[pronunciation] assess failed", err);
@@ -171,13 +179,6 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
     if (next === focusId && phase !== "feedback") return;
     setFocusId(next);
     void loadPhrase(next);
-  }
-
-  function tryAgain() {
-    setFeedback(null);
-    setPhase("idle");
-    setError(null);
-    stopTts();
   }
 
   const busy = loadingPhrase || phase === "assessing";
@@ -241,7 +242,7 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
                 onClick={() =>
                   speakingId === "model"
                     ? stopTts()
-                    : void speak("model", phrase.sentence)
+                    : void speak("model", `Repeat after me. ${phrase.sentence}`)
                 }
               >
                 {loadingId === "model" ? (
@@ -260,7 +261,11 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
                 onClick={() =>
                   speakingId === "slow"
                     ? stopTts()
-                    : void speak("slow", phrase.sentence, { slow: true })
+                    : void speak(
+                        "slow",
+                        `Repeat after me. ${phrase.sentence}`,
+                        { slow: true },
+                      )
                 }
               >
                 {loadingId === "slow" ? (
@@ -285,7 +290,7 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
         )}
       </section>
 
-      {phase !== "feedback" && recorder.supported && (
+      {recorder.supported && (
         <section className="flex flex-col items-center gap-3 text-center">
           <Button
             type="button"
@@ -296,7 +301,7 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
               recorder.recording && "animate-pulse",
             )}
             onClick={toggleMic}
-            disabled={busy}
+            disabled={busy || speakingId === "coach" || speakingId === "echo" || loadingId === "echo"}
             aria-label={recorder.recording ? "Stop and send" : "Record the sentence"}
           >
             {phase === "assessing" ? (
@@ -312,7 +317,9 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
               ? "Listening… tap to finish."
               : phase === "assessing"
                 ? "Your coach is preparing the correction…"
-                : "Hear the sentence, then tap the mic and repeat it."}
+                : phase === "feedback"
+                  ? "Repeat after me. Copy the same words, then tap the mic."
+                  : "Hear it, then tap the mic and repeat after me."}
           </p>
         </section>
       )}
@@ -339,7 +346,10 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
                 onClick={() =>
                   speakingId === "coach"
                     ? stopTts()
-                    : void speak("coach", feedback.spoken || phrase.sentence)
+                    : void speak(
+                        "coach",
+                        feedback.spoken || `Repeat after me. ${phrase.sentence}`,
+                      )
                 }
               >
                 {loadingId === "coach" ? (
@@ -408,8 +418,16 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="outline" className="flex-1" onClick={tryAgain}>
-              <Mic className="mr-2 size-4" /> Try again
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() =>
+                void speak("echo", echoScript(phrase.sentence, feedback.words), {
+                  slow: true,
+                })
+              }
+            >
+              <Volume2 className="mr-2 size-4" /> Repeat after me
             </Button>
             <Button className="flex-1" onClick={() => void loadPhrase(focusId)}>
               <RefreshCw className="mr-2 size-4" /> Next sentence
