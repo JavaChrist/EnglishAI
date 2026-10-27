@@ -53,6 +53,12 @@ export function levelToCEFR(level: number): CEFRLevel {
   return "C2";
 }
 
+/** A1–B1 hear coaching in French. From B2 on, explanations stay in English. */
+export function explainsInFrench(level: number): boolean {
+  const band = levelToCEFR(level);
+  return band === "A1" || band === "A2" || band === "B1";
+}
+
 export type PerformanceSignals = {
   /**
    * Absolute estimate (0–100) of the learner's demonstrated proficiency, judged

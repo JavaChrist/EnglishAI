@@ -13,22 +13,31 @@ type Voice = "male" | "female";
  */
 export function useTts(voice: Voice) {
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const endedRef = React.useRef<(() => void) | null>(null);
   const [speakingId, setSpeakingId] = React.useState<string | null>(null);
   const [loadingId, setLoadingId] = React.useState<string | null>(null);
 
+  const finishClip = React.useCallback(() => {
+    const done = endedRef.current;
+    endedRef.current = null;
+    done?.();
+  }, []);
+
   const stop = React.useCallback(() => {
+    endedRef.current = null;
     audioRef.current?.pause();
     setSpeakingId(null);
     setLoadingId(null);
   }, []);
 
   const speak = React.useCallback(
-    async (id: string, text: string, opts?: { slow?: boolean }) => {
+    async (id: string, text: string, opts?: { slow?: boolean; onEnded?: () => void }) => {
       const clean = text.trim();
       if (!clean) return;
 
       const audio = audioRef.current ?? new Audio();
       audioRef.current = audio;
+      endedRef.current = opts?.onEnded ?? null;
       audio.pause();
 
       const params = new URLSearchParams({ voice, text: clean });
@@ -38,10 +47,14 @@ export function useTts(voice: Voice) {
         setLoadingId(null);
         setSpeakingId(id);
       };
-      audio.onended = () => setSpeakingId(null);
+      audio.onended = () => {
+        setSpeakingId(null);
+        finishClip();
+      };
       audio.onerror = () => {
         setLoadingId(null);
         setSpeakingId(null);
+        finishClip();
       };
 
       setLoadingId(id);
@@ -51,9 +64,10 @@ export function useTts(voice: Voice) {
         console.error("[useTts] playback failed", error);
         setLoadingId(null);
         setSpeakingId(null);
+        finishClip();
       }
     },
-    [voice],
+    [voice, finishClip],
   );
 
   React.useEffect(() => {

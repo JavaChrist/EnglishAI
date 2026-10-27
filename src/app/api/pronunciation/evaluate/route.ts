@@ -1,3 +1,4 @@
+import { explainsInFrench } from "@/lib/ai/adaptation";
 import {
   assessPronunciation,
   getFocus,
@@ -36,11 +37,21 @@ export async function POST(req: Request) {
   }
 
   const focus = getFocus(focusId);
+
+  const { data: lang } = await supabase
+    .from("language_profile")
+    .select("estimated_level")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const french = explainsInFrench(Number(lang?.estimated_level ?? 25));
+
   const phrase: Phrase = {
     sentence,
+    translation: "",
     focusId: focus.id,
-    focus: focus.coach,
-    guide: focus.guide,
+    focus: french ? focus.coachFr : focus.coach,
+    guide: french ? focus.guideFr : focus.guide,
+    explainInFrench: french,
   };
 
   const audio = new Uint8Array(await file.arrayBuffer());

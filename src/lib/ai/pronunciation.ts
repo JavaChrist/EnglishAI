@@ -2,7 +2,7 @@ import { openai } from "@ai-sdk/openai";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 
-import { difficultyBrief } from "@/lib/ai/adaptation";
+import { difficultyBrief, explainsInFrench } from "@/lib/ai/adaptation";
 import {
   getFocus,
   type PronunciationFocus,
@@ -15,9 +15,13 @@ export { getFocus };
 
 export type Phrase = {
   sentence: string;
+  /** Simple French meaning, shown under the sentence. */
+  translation: string;
   focusId: string;
   focus: string;
   guide: string;
+  /** A1–B1: coaching copy is French. The sentence to repeat stays English. */
+  explainInFrench: boolean;
 };
 
 function pick<T>(items: readonly T[]): T {
@@ -28,7 +32,35 @@ function cleanSentence(text: string): string {
   return text
     .trim()
     .replace(/^["']|["']$/g, "")
-    .replace(/\s+/g, " ");
+    .replace(/^(english|french|en|fr|traduction|translation)\s*:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitDrill(text: string): { sentence: string; translation: string } {
+  const lines = text
+    .split(/\n+/)
+    .map((line) => cleanSentence(line))
+    .filter(Boolean);
+  return { sentence: lines[0] ?? "", translation: lines[1] ?? "" };
+}
+
+async function frenchGloss(sentence: string): Promise<string> {
+  try {
+    const { text } = await generateText({
+      model: textModel(),
+      temperature: 0.2,
+      system:
+        "Translate the English sentence into simple, natural French. Output only the translation, no quotes.",
+      prompt: sentence,
+    });
+    const translation = cleanSentence(text.split(/\n/)[0] ?? "");
+    if (!translation || translation.toLowerCase() === sentence.toLowerCase()) return "";
+    return translation;
+  } catch (error) {
+    console.error("[frenchGloss] failed", error);
+    return "";
+  }
 }
 
 /**
@@ -41,6 +73,7 @@ export async function generatePronunciationPhrase(
   avoid: string[] = [],
 ): Promise<Phrase> {
   const focus = getFocus(focusId);
+  const french = explainsInFrench(currentLevel);
   const brief = difficultyBrief(currentLevel);
   const avoidList = avoid
     .slice(-4)
@@ -48,18 +81,21 @@ export async function generatePronunciationPhrase(
     .join("\n");
 
   let sentence = "";
+  let translation = "";
   try {
     const { text } = await generateText({
       model: textModel(),
       temperature: 0.9,
       system:
-        "You write ONE short English sentence for a pronunciation drill. The learner will hear it and repeat it. 5 to 12 words. Everyday and concrete. Fully understandable at their level. Output ONLY the sentence, no quotes, no focus label, no explanation.",
+        "You write ONE short English sentence for a pronunciation drill, plus its French meaning. The learner will hear the English and repeat it. 5 to 12 words. Everyday and concrete. Fully understandable at their level. Output exactly two lines and nothing else. Line 1: the English sentence. Line 2: a simple natural French translation. No quotes, no labels.",
       prompt: `Learner level: ${brief}
 Sound to practise: ${focus.coach}
 ${focus.instruction}
-${avoidList ? `Do NOT repeat these sentences:\n${avoidList}\n` : ""}Write one sentence.`,
+${avoidList ? `Do NOT repeat these sentences:\n${avoidList}\n` : ""}Write the sentence and its translation.`,
     });
-    sentence = cleanSentence(text);
+    const drill = splitDrill(text);
+    sentence = drill.sentence;
+    translation = drill.translation;
   } catch (error) {
     console.error("[generatePronunciationPhrase] failed", error);
   }
@@ -67,15 +103,24 @@ ${avoidList ? `Do NOT repeat these sentences:\n${avoidList}\n` : ""}Write one se
   const wordCount = sentence.split(/\s+/).filter(Boolean).length;
   if (!sentence || wordCount < 4 || wordCount > 16 || !focus.pattern.test(sentence)) {
     const unused =
-      focus.fallbacks.find((line) => !avoid.includes(line)) ?? pick(focus.fallbacks);
-    sentence = unused;
+      focus.fallbacks.find((line) => !avoid.includes(line.sentence)) ??
+      pick(focus.fallbacks);
+    sentence = unused.sentence;
+    translation = unused.translation;
+  } else if (
+    !translation ||
+    translation.toLowerCase() === sentence.toLowerCase()
+  ) {
+    translation = await frenchGloss(sentence);
   }
 
   return {
     sentence,
+    translation,
     focusId: focus.id,
-    focus: focus.coach,
-    guide: focus.guide,
+    focus: french ? focus.coachFr : focus.coach,
+    guide: french ? focus.guideFr : focus.guide,
+    explainInFrench: french,
   };
 }
 
@@ -90,7 +135,9 @@ export type PronunciationFeedback = {
   heard: string;
   encouragement: string;
   tip: string;
-  /** Script read aloud by the coach voice. */
+  /** Coaching lines, in French below B2 and in English from B2 on. */
+  explain: string;
+  /** English "Repeat after me" model. Kept in English so the voice stays accurate. */
   spoken: string;
   words: WordFeedback[];
 };
@@ -130,6 +177,10 @@ function soften(text: string): string {
     .replace(/\bwrong\b/gi, "tricky")
     .replace(/\bincorrect\b/gi, "unclear")
     .replace(/\bmistake\b/gi, "spot to polish")
+    .replace(/\bfaux\b/gi, "à retravailler")
+    .replace(/\bincorrecte?s?\b/gi, "pas encore net")
+    .replace(/\berreurs?\b/gi, "point à retravailler")
+    .replace(/\bmauvaises?\b/gi, "à retravailler")
     .replace(/\s{2,}/g, " ")
     .trim();
 }
@@ -144,7 +195,14 @@ function mergeWords(
   sentence: string,
   reported: { word: string; status: "clear" | "check"; note?: string }[],
   score: number,
+  french: boolean,
 ): WordFeedback[] {
+  const missing = french
+    ? "Écoute encore une fois et recopie ce mot."
+    : "Listen once more and match this word.";
+  const vague = french
+    ? "Écoute encore une fois et recopie ce son."
+    : "Listen once more and match this sound.";
   const queue = reported.map((item) => ({ ...item }));
   return targetWords(sentence).map((word) => {
     const key = normalizeWord(word);
@@ -153,7 +211,7 @@ function mergeWords(
       return {
         word,
         status: score >= 80 ? "clear" : "check",
-        note: score >= 80 ? undefined : "Listen once more and match this word.",
+        note: score >= 80 ? undefined : missing,
       };
     }
     const hit = queue.splice(index, 1)[0];
@@ -162,68 +220,79 @@ function mergeWords(
     return {
       word,
       status: "check",
-      note: note || "Listen once more and match this sound.",
+      note: note || vague,
     };
   });
 }
 
-/**
- * Spoken correction, then an exact "Repeat after me" model. The model uses
- * only the target words, so the learner copies them instead of inventing new ones.
- */
-function spokenCorrection(
-  sentence: string,
-  feedback: Omit<PronunciationFeedback, "spoken">,
+/** English model only, so the voice pronounces the target words correctly. */
+function modelLine(sentence: string, words: WordFeedback[]): string {
+  const checks = words.filter((word) => word.status === "check").slice(0, 3);
+  if (checks.length === 0) return `Repeat after me. ${sentence}`;
+  const pieces = checks.map((word) => `${word.word}... ${word.word}.`).join(" ");
+  return `Repeat after me. ${pieces} Now the whole sentence. Repeat after me. ${sentence}`;
+}
+
+function explanationText(
+  french: boolean,
+  feedback: Omit<PronunciationFeedback, "spoken" | "explain">,
 ): string {
-  const checks = feedback.words.filter((word) => word.status === "check").slice(0, 3);
   if (feedback.score < 20) {
-    return `I didn't catch that. Come a little closer. Repeat after me. ${sentence}`;
+    return french
+      ? "Je n'ai pas bien entendu. Rapproche-toi un peu du micro."
+      : "I didn't catch that. Come a little closer.";
   }
-  const model =
-    checks.length === 0
-      ? `Repeat after me. ${sentence}`
-      : `Repeat after me. ${checks
-          .map((word) => `${word.word}... ${word.word}.`)
-          .join(" ")} Now the whole sentence. Repeat after me. ${sentence}`;
-  const hints =
-    checks.length === 0
-      ? feedback.encouragement
-      : checks
-          .map((word) => {
-            const hint = word.note?.replace(/[.]+$/g, "").trim();
-            return hint ? `${word.word}. ${hint}.` : word.word;
-          })
-          .join(" ");
-  const script = `${hints} Don't add any words. ${model}`;
-  return script.length > 700 ? script.slice(0, 700).replace(/\s+\S*$/, "") : script;
+  const checks = feedback.words
+    .filter((word) => word.status === "check")
+    .slice(0, 3);
+  if (checks.length === 0) return feedback.encouragement;
+  const hints = checks
+    .map((word) => {
+      const hint = word.note?.replace(/[.]+$/g, "").trim();
+      return hint ? `${word.word}. ${hint}.` : word.word;
+    })
+    .join(" ");
+  const tail = french ? "Ne change pas les mots." : "Don't add any words.";
+  const script = `${hints} ${tail}`;
+  return script.length > 500 ? script.slice(0, 500).replace(/\s+\S*$/, "") : script;
 }
 
 function withSpoken(
+  french: boolean,
   sentence: string,
-  feedback: Omit<PronunciationFeedback, "spoken">,
+  feedback: Omit<PronunciationFeedback, "spoken" | "explain">,
 ): PronunciationFeedback {
-  return { ...feedback, spoken: spokenCorrection(sentence, feedback) };
+  return {
+    ...feedback,
+    explain: explanationText(french, feedback),
+    spoken: modelLine(sentence, feedback.words),
+  };
 }
 
 function shapeFeedback(
-  sentence: string,
+  phrase: Phrase,
   raw: z.infer<typeof feedbackSchema>,
 ): PronunciationFeedback {
+  const french = phrase.explainInFrench;
   const score = clampScore(raw.score);
-  const words = mergeWords(sentence, raw.words, score);
+  const words = mergeWords(phrase.sentence, raw.words, score, french);
   const checks = words.filter((word) => word.status === "check").length;
   const adjusted =
     words.length > 0 && checks === 0 ? Math.max(score, 85) : score;
 
-  return withSpoken(sentence, {
+  return withSpoken(french, phrase.sentence, {
     score: adjusted,
-    heard: soften(raw.heard) || sentence,
+    heard: soften(raw.heard) || phrase.sentence,
     encouragement:
       soften(raw.encouragement) ||
-      (adjusted >= 80 ? "That sounded clear." : "Good try. Let's shape one sound."),
-    tip:
-      soften(raw.tip) ||
-      "Listen to the model slowly, then copy the rhythm.",
+      (adjusted >= 80
+        ? french
+          ? "C'était clair."
+          : "That sounded clear."
+        : french
+          ? "Bien essayé. On va travailler un son."
+          : "Good try. Let's shape one sound."),
+    tip: soften(raw.tip) || phrase.guide,
     words,
   });
 }
@@ -258,17 +327,23 @@ function messageText(payload: {
   return "";
 }
 
-const COACH_RULES = `You are a warm English pronunciation coach. Listen to the learner repeating a model sentence. Judge the SOUNDS, not grammar and not ideas.
-Never say "wrong", "incorrect", "mistake", or "bad". Be specific and kind.
+function coachRules(french: boolean): string {
+  const language = french
+    ? `Write encouragement, tip, and every note in simple spoken French, the kind an A2 learner understands. Keep the English word you are coaching in English, for example "Pour think, pose la langue entre les dents." The heard field stays a short English transcript.`
+    : `Write encouragement, tip, and notes in plain spoken English.`;
+  return `You are a warm English pronunciation coach. Listen to the learner repeating a model sentence. Judge the SOUNDS, not grammar and not ideas.
+Never say "wrong", "incorrect", "mistake", "bad", "faux", "erreur", or "mauvais". Be specific and kind.
+${language}
 Return JSON only:
 {
   "score": number from 0 to 100 (how close the sounds were),
-  "heard": "what you actually heard, in a short phrase",
+  "heard": "what you actually heard, in a short English phrase",
   "encouragement": "one warm specific compliment, max 14 words",
   "tip": "one concrete tip about the mouth, breath, or stress, max 24 words",
-  "words": [{ "word": "each target word in order", "status": "clear" or "check",   "note": "only when status is check, max 10 words of plain spoken English about the mouth or the sound. No phonetic symbols." }]
+  "words": [{ "word": "each target word in order", "status": "clear" or "check", "note": "only when status is check, max 16 words about the mouth or the sound. No phonetic symbols." }]
 }
 Mark "check" only when that word was missing, unclear, or a different sound. If the sentence was clear, score 85-100. If you hear almost no speech, score under 25 and say so kindly in the tip.`;
+}
 
 async function assessWithAudio(
   audio: Uint8Array,
@@ -298,7 +373,7 @@ Listen and score the pronunciation. List every target word in order.`;
       modalities: ["text"],
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: COACH_RULES },
+        { role: "system", content: coachRules(phrase.explainInFrench) },
         {
           role: "user",
           content: [
@@ -358,7 +433,7 @@ Listen and score the pronunciation. List every target word in order.`;
         console.error("[pronunciation] audio JSON rejected", parsed.error.message);
         return null;
       }
-      return shapeFeedback(phrase.sentence, parsed.data);
+      return shapeFeedback(phrase, parsed.data);
     } catch (error) {
       console.error("[pronunciation] audio assess threw", model, error);
     }
@@ -368,7 +443,11 @@ Listen and score the pronunciation. List every target word in order.`;
 }
 
 /** Word-level match between the target and a plain transcript. */
-function alignWords(sentence: string, heard: string): WordFeedback[] {
+function alignWords(
+  sentence: string,
+  heard: string,
+  french: boolean,
+): WordFeedback[] {
   const target = targetWords(sentence);
   const spoken = targetWords(heard);
   const n = target.length;
@@ -409,7 +488,9 @@ function alignWords(sentence: string, heard: string): WordFeedback[] {
       : {
           word,
           status: "check",
-          note: "This word didn't come through. Listen and copy it.",
+          note: french
+            ? "Ce mot n'est pas passé. Écoute-le et recopie-le."
+            : "This word didn't come through. Listen and copy it.",
         },
   );
 }
@@ -480,35 +561,47 @@ async function polishFromTranscript(
       ? 0
       : clampScore((100 * (words.length - checks.length)) / words.length);
 
+  const french = phrase.explainInFrench;
   const base = {
     score: checks.length === 0 ? Math.max(score, 88) : score,
-    heard: heard || "I couldn't catch the words.",
+    heard: heard || (french ? "Je n'ai pas saisi les mots." : "I couldn't catch the words."),
     encouragement:
       checks.length === 0
-        ? "Clear from start to finish."
-        : "Good try. A few sounds need another pass.",
+        ? french
+          ? "Clair du début à la fin."
+          : "Clear from start to finish."
+        : french
+          ? "Bien essayé. Quelques sons sont encore à reprendre."
+          : "Good try. A few sounds need another pass.",
     tip:
       checks.length === 0
         ? phrase.guide
-        : "Play it slowly, then copy the highlighted words.",
+        : french
+          ? "Écoute lentement, puis recopie les mots en évidence."
+          : "Play it slowly, then copy the highlighted words.",
     words,
   };
 
   if (!heard) {
-    return withSpoken(phrase.sentence, {
+    return withSpoken(french, phrase.sentence, {
       ...base,
       score: 0,
-      encouragement: "I didn't catch that.",
-      tip: "Move a little closer to the mic and try the sentence again.",
+      encouragement: french ? "Je n'ai pas entendu." : "I didn't catch that.",
+      tip: french
+        ? "Rapproche-toi un peu du micro et redis la phrase."
+        : "Move a little closer to the mic and try the sentence again.",
     });
   }
+
+  const language = french
+    ? "Write the encouragement, the tip, and every note in simple spoken French. Keep each English target word in English inside the French sentence. Never say faux, erreur, or mauvais."
+    : "Notes are short, speakable English about the mouth or the missing sound.";
 
   try {
     const { output } = await generateText({
       model: textModel(),
       output: Output.object({ schema: noteSchema }),
-      system:
-        "You are a warm English pronunciation coach. You only see a transcript of a repeat-after-me attempt, so judge word sounds from what was heard versus the target. Never say wrong, incorrect, or mistake. Notes are short, speakable English about the mouth or the missing sound. No phonetic symbols.",
+      system: `You are a warm English pronunciation coach. You only see a transcript of a repeat-after-me attempt, so judge word sounds from what was heard versus the target. Never say wrong, incorrect, or mistake. No phonetic symbols. ${language}`,
       prompt: `Target: ${phrase.sentence}
 Focus: ${phrase.focus}
 Guide: ${phrase.guide}
@@ -521,7 +614,7 @@ Write one encouragement, one tip, and a note only for each word to polish.`,
       output.notes.map((item) => [normalizeWord(item.word), soften(item.note)]),
     );
 
-    return withSpoken(phrase.sentence, {
+    return withSpoken(french, phrase.sentence, {
       ...base,
       encouragement: soften(output.encouragement) || base.encouragement,
       tip: soften(output.tip) || base.tip,
@@ -536,7 +629,7 @@ Write one encouragement, one tip, and a note only for each word to polish.`,
     });
   } catch (error) {
     console.error("[pronunciation] text polish failed", error);
-    return withSpoken(phrase.sentence, base);
+    return withSpoken(french, phrase.sentence, base);
   }
 }
 
@@ -557,5 +650,9 @@ export async function assessPronunciation(
 
   const heard = await transcribe(audio, mime);
   if (heard == null) return null;
-  return polishFromTranscript(phrase, heard, alignWords(phrase.sentence, heard));
+  return polishFromTranscript(
+    phrase,
+    heard,
+    alignWords(phrase.sentence, heard, phrase.explainInFrench),
+  );
 }

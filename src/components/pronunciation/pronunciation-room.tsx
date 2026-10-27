@@ -25,9 +25,11 @@ import type { Voice } from "@/types/database";
 
 type Phrase = {
   sentence: string;
+  translation?: string;
   focusId: string;
   focus: string;
   guide: string;
+  explainInFrench?: boolean;
 };
 
 type WordFeedback = {
@@ -41,6 +43,7 @@ type Feedback = {
   heard: string;
   encouragement: string;
   tip: string;
+  explain?: string;
   spoken: string;
   words: WordFeedback[];
 };
@@ -62,13 +65,35 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
   const [phase, setPhase] = React.useState<Phase>("idle");
   const [feedback, setFeedback] = React.useState<Feedback | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [holding, setHolding] = React.useState(false);
 
   const recentRef = React.useRef<string[]>([]);
   const requestRef = React.useRef(0);
+  const focusRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    focusRef.current = focusId;
+  }, [focusId]);
 
   const { speak, stop: stopTts, speakingId, loadingId } = useTts(voice);
 
-  const loadPhrase = React.useCallback(async (nextFocus: string | null) => {
+  const playCoach = React.useCallback(
+    (explain: string, model: string) => {
+      const line = model.trim();
+      if (!explain.trim()) {
+        if (line) void speak("echo", line);
+        return;
+      }
+      void speak("coach", explain, {
+        onEnded: () => {
+          if (line) void speak("echo", line);
+        },
+      });
+    },
+    [speak],
+  );
+
+  const loadPhrase = React.useCallback(async (nextFocus: string | null): Promise<Phrase | null> => {
     const request = ++requestRef.current;
     setLoadingPhrase(true);
     setError(null);
@@ -86,13 +111,15 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
       });
       if (!res.ok) throw new Error(`Phrase ${res.status}`);
       const next = (await res.json()) as Phrase;
-      if (request !== requestRef.current) return;
+      if (request !== requestRef.current) return null;
       setPhrase(next);
       recentRef.current = [...recentRef.current, next.sentence].slice(-6);
+      return next;
     } catch (err) {
       console.error("[pronunciation] phrase failed", err);
-      if (request !== requestRef.current) return;
+      if (request !== requestRef.current) return null;
       setError("Couldn't load a sentence. Please try again.");
+      return null;
     } finally {
       if (request === requestRef.current) setLoadingPhrase(false);
     }
@@ -137,17 +164,44 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
         const data = (await res.json()) as Feedback;
         setFeedback(data);
         setPhase("feedback");
-        const coachLine =
-          data.spoken?.trim() ||
-          `Repeat after me. ${phrase.sentence}`;
-        void speak("coach", coachLine);
+        const passed =
+          data.score >= 80 &&
+          data.words.length > 0 &&
+          data.words.every((word) => word.status === "clear");
+
+        if (!passed) {
+          playCoach(
+            data.explain?.trim() || data.tip,
+            data.spoken?.trim() || `Repeat after me. ${phrase.sentence}`,
+          );
+          return;
+        }
+
+        setHolding(true);
+        const bridge = phrase.explainInFrench
+          ? "C'était clair. Voici une nouvelle phrase."
+          : "That was clear. Here comes a new sentence.";
+        void speak("coach", bridge, {
+          onEnded: () => {
+            void (async () => {
+              const next = await loadPhrase(focusRef.current);
+              if (!next) {
+                setHolding(false);
+                return;
+              }
+              void speak("model", `Repeat after me. ${next.sentence}`, {
+                onEnded: () => setHolding(false),
+              });
+            })();
+          },
+        });
       } catch (err) {
         console.error("[pronunciation] assess failed", err);
         setError("Couldn't assess that recording. Please try again.");
         setPhase("idle");
       }
     },
-    [phrase, speak],
+    [phrase, speak, loadPhrase, playCoach],
   );
 
   const handleRecorded = React.useCallback(
@@ -162,7 +216,8 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
     !!phrase &&
     phase !== "assessing" &&
     speakingId == null &&
-    loadingId == null;
+    loadingId == null &&
+    !holding;
   const mic = useOpenMic({ enabled: micReady, onUtterance: handleRecorded });
 
   function chooseFocus(next: string | null) {
@@ -219,8 +274,15 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
         ) : (
           <>
             <p className="text-lg leading-snug">{phrase.sentence}</p>
+            {phrase.translation ? (
+              <p className="mt-1 text-sm leading-snug text-sky-700 dark:text-sky-300">
+                {phrase.translation}
+              </p>
+            ) : null}
             <p className="mt-3 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">Focus: </span>
+              <span className="font-medium text-foreground">
+                {phrase.explainInFrench ? "Son : " : "Focus: "}
+              </span>
               {phrase.focus}. {phrase.guide}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-1">
@@ -316,7 +378,9 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
                 ? "Your coach is preparing the correction…"
                 : speakingId || loadingId
                   ? "The coach is speaking. The microphone stays on."
-                  : mic.hearing
+                  : holding
+                    ? "A new sentence is on the way."
+                    : mic.hearing
                     ? "Hearing you…"
                     : "Microphone on. Speak when you are ready."}
           </p>
@@ -343,25 +407,27 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
                 size="sm"
                 className="h-8 gap-1 px-2 text-xs text-muted-foreground"
                 onClick={() =>
-                  speakingId === "coach"
+                  speakingId === "coach" || speakingId === "echo"
                     ? stopTts()
-                    : void speak(
-                        "coach",
+                    : playCoach(
+                        feedback.explain?.trim() || feedback.tip,
                         feedback.spoken || `Repeat after me. ${phrase.sentence}`,
                       )
                 }
               >
-                {loadingId === "coach" ? (
+                {loadingId === "coach" || loadingId === "echo" ? (
                   <Loader2 className="size-3.5 animate-spin" />
-                ) : speakingId === "coach" ? (
+                ) : speakingId === "coach" || speakingId === "echo" ? (
                   <Square className="size-3.5 fill-current" />
                 ) : (
                   <Volume2 className="size-3.5" />
                 )}
-                {speakingId === "coach" ? "Stop" : "Hear again"}
+                {speakingId === "coach" || speakingId === "echo" ? "Stop" : "Hear again"}
               </Button>
             </div>
-            <p className="text-sm leading-relaxed">{feedback.spoken}</p>
+            <p className="text-sm leading-relaxed">
+              {feedback.explain?.trim() || feedback.tip}
+            </p>
           </div>
 
           <div className="flex flex-col items-center gap-2">
@@ -404,7 +470,7 @@ export function PronunciationRoom({ voice }: { voice: Voice }) {
 
           <div className="rounded-2xl border border-border/60 bg-muted/40 p-4">
             <p className="mb-1 text-xs font-medium uppercase text-muted-foreground">
-              What it sounded like
+              {phrase.explainInFrench ? "Ce que j'ai entendu" : "What it sounded like"}
             </p>
             <p className="text-sm italic">{feedback.heard}</p>
           </div>
